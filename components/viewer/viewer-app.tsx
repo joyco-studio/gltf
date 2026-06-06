@@ -37,7 +37,8 @@ function EmptyState() {
             Drop a .glb / .gltf anywhere
           </p>
           <p className="font-mono text-xs text-muted-foreground">
-            then browse its meshes, materials and textures — or press{' '}
+            or paste a URL — then browse its meshes, materials and textures,
+            press{' '}
             <KbdGroup className="inline-flex">
               <Kbd>⌘</Kbd>
               <Kbd>K</Kbd>

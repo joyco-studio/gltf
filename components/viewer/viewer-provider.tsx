@@ -21,6 +21,7 @@ interface ViewerContextValue {
   /** Mount a canvas into the viz. Returns a cleanup to dispose the instance. */
   attach: (canvas: HTMLCanvasElement) => () => void
   openFiles: (files: File[]) => void
+  openUrl: (url: string) => void
   tab: InspectorTab
   setTab: (tab: InspectorTab) => void
   selection: Selection | null
@@ -81,12 +82,21 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     [viewer]
   )
 
+  const openUrl = React.useCallback(
+    (url: string) => {
+      select(null)
+      void viewer?.loadUrl(url)
+    },
+    [viewer]
+  )
+
   const value = React.useMemo(
     () => ({
       viewer,
       snapshot,
       attach,
       openFiles,
+      openUrl,
       tab,
       setTab,
       selection,
@@ -94,7 +104,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       searchOpen,
       setSearchOpen,
     }),
-    [viewer, snapshot, attach, openFiles, tab, selection, searchOpen]
+    [viewer, snapshot, attach, openFiles, openUrl, tab, selection, searchOpen]
   )
 
   return (

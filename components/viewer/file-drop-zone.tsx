@@ -8,12 +8,33 @@ import { useViewer } from './viewer-provider'
 const ACCEPTED_EXTENSIONS =
   '.glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2,.avif'
 
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target.isContentEditable
+  )
+}
+
+function parseHttpUrl(text: string): string | null {
+  try {
+    const url = new URL(text.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.href
+      : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Window-level drag & drop target. Renders a full-screen affordance while a
- * drag is in flight and forwards dropped files to the viewer.
+ * drag is in flight and forwards dropped files to the viewer. Also handles
+ * paste: clipboard files load directly, a pasted http(s) URL is fetched.
  */
 function FileDropZone() {
-  const { openFiles } = useViewer()
+  const { openFiles, openUrl } = useViewer()
   const [dragging, setDragging] = React.useState(false)
   const dragDepth = React.useRef(0)
 
@@ -41,17 +62,37 @@ function FileDropZone() {
       if (files.length > 0) openFiles(files)
     }
 
+    const handlePaste = (event: ClipboardEvent) => {
+      // don't hijack pastes aimed at inputs (e.g. the ⌘K search)
+      if (isTypingTarget(event.target)) return
+
+      const files = [...(event.clipboardData?.files ?? [])]
+      if (files.length > 0) {
+        event.preventDefault()
+        openFiles(files)
+        return
+      }
+
+      const url = parseHttpUrl(event.clipboardData?.getData('text') ?? '')
+      if (url) {
+        event.preventDefault()
+        openUrl(url)
+      }
+    }
+
     window.addEventListener('dragenter', handleDragEnter)
     window.addEventListener('dragleave', handleDragLeave)
     window.addEventListener('dragover', handleDragOver)
     window.addEventListener('drop', handleDrop)
+    window.addEventListener('paste', handlePaste)
     return () => {
       window.removeEventListener('dragenter', handleDragEnter)
       window.removeEventListener('dragleave', handleDragLeave)
       window.removeEventListener('dragover', handleDragOver)
       window.removeEventListener('drop', handleDrop)
+      window.removeEventListener('paste', handlePaste)
     }
-  }, [openFiles])
+  }, [openFiles, openUrl])
 
   if (!dragging) return null
 
