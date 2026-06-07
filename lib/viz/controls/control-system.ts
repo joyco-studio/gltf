@@ -6,12 +6,12 @@ import type { ProjectionMode } from '../systems/camera-system'
 import type { Viewer } from '../viewer'
 import { FlyMode } from './fly-mode'
 import { OrbitMode } from './orbit-mode'
-import type {
-  Axis,
-  AxisLock,
-  CameraControlContext,
-  CameraControlMode,
-  ControlModeId,
+import {
+  AXIS_VECTORS,
+  type Axis,
+  type CameraControlContext,
+  type CameraControlMode,
+  type ControlModeId,
 } from './types'
 
 interface InspectTarget {
@@ -20,23 +20,31 @@ interface InspectTarget {
   name: string
 }
 
+interface AxisAlignment {
+  axis: Axis
+  sign: 1 | -1
+}
+
 interface ControlsSnapshot {
   mode: ControlModeId
-  axisLock: AxisLock | null
   /** True while fly mode owns the pointer (mouse look engaged). */
   pointerLocked: boolean
   projection: ProjectionMode
   /** Item currently framed for close inspection, if any. */
   inspecting: InspectTarget | null
+  /** Axis the camera currently sits on (relative to the focus), if any. */
+  alignedAxis: AxisAlignment | null
 }
 
 const DEFAULT_SNAPSHOT: ControlsSnapshot = {
   mode: 'orbit',
-  axisLock: null,
   pointerLocked: false,
   projection: 'perspective',
   inspecting: null,
+  alignedAxis: null,
 }
+
+const ALIGNMENT_THRESHOLD = 0.9995
 
 /**
  * Pluggable camera navigation. Owns the shared focus target, the mode
@@ -52,8 +60,8 @@ class ControlSystem
   private context!: CameraControlContext
   private modes = new Map<ControlModeId, CameraControlMode>()
   private active!: CameraControlMode
-  private axisLock: AxisLock | null = null
   private inspecting: InspectTarget | null = null
+  private alignedAxis: AxisAlignment | null = null
   private snapshot: ControlsSnapshot = DEFAULT_SNAPSHOT
 
   private readonly canvas: HTMLCanvasElement
@@ -108,33 +116,36 @@ class ControlSystem
     this.active = next
     // The new mode adopts the camera exactly where the old one left it.
     this.active.enable()
-    this.active.applyAxisLock(this.axisLock)
     this.publish()
   }
 
   /**
-   * Cycle an axis lock the typical way: off → look from +axis → look from
-   * −axis → off. Locking a different axis switches directly to its + side.
+   * One-shot view snap: position the camera on the axis at the current
+   * focus distance, looking at the target. Never locks anything — the user
+   * keeps full control immediately after. Pressing again flips to the
+   * opposite side of the axis.
    */
-  toggleAxisLock(axis: Axis) {
-    if (this.axisLock?.axis !== axis) {
-      this.axisLock = { axis, sign: 1 }
-    } else if (this.axisLock.sign === 1) {
-      this.axisLock = { axis, sign: -1 }
-    } else {
-      this.axisLock = null
-    }
+  snapToAxis(axis: Axis) {
+    const { camera, target } = this.context
+    const offset = camera.position.clone().sub(target)
+    const distance = Math.max(offset.length(), 0.01)
 
-    this.active.applyAxisLock(this.axisLock)
-    this.publish()
+    // already looking from the + side? flip to the − side
+    const alignment = offset.normalize().dot(new Vector3(...AXIS_VECTORS[axis]))
+    const sign = alignment > 0.999 ? -1 : 1
+
+    camera.position
+      .copy(target)
+      .addScaledVector(new Vector3(...AXIS_VECTORS[axis]), sign * distance)
+    camera.lookAt(target)
+    this.active.syncWithCamera()
   }
 
   /** Swap projection, preserving the apparent framing around the target. */
   setProjection(mode: ProjectionMode) {
     this.viewer.camera.setProjection(mode, this.context.target)
-    // rebind the active mode to the swapped camera (+ re-assert axis lock)
+    // rebind the active mode to the swapped camera
     this.active.syncWithCamera()
-    this.active.applyAxisLock(this.axisLock)
     this.publish()
   }
 
@@ -221,16 +232,41 @@ class ControlSystem
 
   update(dt: number) {
     this.active.update(dt)
+
+    // track camera↔axis alignment; publish only on transitions so the UI
+    // can light the axis buttons up while aligned and drop them on movement
+    const aligned = this.computeAlignment()
+    if (
+      aligned?.axis !== this.alignedAxis?.axis ||
+      aligned?.sign !== this.alignedAxis?.sign
+    ) {
+      this.alignedAxis = aligned
+      this.publish()
+    }
+  }
+
+  private computeAlignment(): AxisAlignment | null {
+    const { camera, target } = this.context
+    const offset = camera.position.clone().sub(target)
+    const length = offset.length()
+    if (length < 1e-6) return null
+    offset.divideScalar(length)
+
+    for (const axis of ['x', 'y', 'z'] as Axis[]) {
+      if (offset[axis] > ALIGNMENT_THRESHOLD) return { axis, sign: 1 }
+      if (offset[axis] < -ALIGNMENT_THRESHOLD) return { axis, sign: -1 }
+    }
+    return null
   }
 
   private publish() {
     const fly = this.modes.get('fly') as FlyMode | undefined
     this.snapshot = {
       mode: this.active.id,
-      axisLock: this.axisLock,
       pointerLocked: fly?.isPointerLocked ?? false,
       projection: this.viewer.camera.mode,
       inspecting: this.inspecting,
+      alignedAxis: this.alignedAxis,
     }
     this.emit('change', this.snapshot)
   }

@@ -8,6 +8,8 @@ import {
   type ViewerSnapshot,
 } from '@/lib/viz/viewer'
 
+import { formatSharePath } from './share-path'
+
 type InspectorTab = 'contents' | 'textures' | 'animations'
 
 interface Selection {
@@ -22,6 +24,8 @@ interface ViewerContextValue {
   attach: (canvas: HTMLCanvasElement) => () => void
   openFiles: (files: File[]) => void
   openUrl: (url: string) => void
+  /** Reveal + inspect an entity (same effect as picking it in ⌘K search). */
+  jumpTo: (selection: Selection, name: string) => void
   tab: InspectorTab
   setTab: (tab: InspectorTab) => void
   sidebarOpen: boolean
@@ -93,6 +97,33 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     [viewer]
   )
 
+  const jumpTo = React.useCallback(
+    (selection: Selection, name: string) => {
+      // show it in the sidebar (re-opening it if collapsed)...
+      setSidebarOpen(true)
+      setTab(
+        selection.kind === 'texture'
+          ? 'textures'
+          : selection.kind === 'animation'
+            ? 'animations'
+            : 'contents'
+      )
+      select(selection)
+      // ...and trigger the scene effect: animations play (exclusive), every
+      // other kind gets framed + highlighted for inspection (ESC exits)
+      if (selection.kind === 'animation') {
+        viewer?.animations.play(selection.id)
+      } else {
+        viewer?.inspectItem(selection.kind, selection.id, name)
+      }
+      // reflect the spot in the URL (?path=materials.mat_1) so it's shareable
+      const params = new URLSearchParams(window.location.search)
+      params.set('path', formatSharePath(selection.kind, name))
+      window.history.replaceState(null, '', `?${params}`)
+    },
+    [viewer]
+  )
+
   const value = React.useMemo(
     () => ({
       viewer,
@@ -100,6 +131,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
+      jumpTo,
       tab,
       setTab,
       sidebarOpen,
@@ -115,6 +147,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
+      jumpTo,
       tab,
       sidebarOpen,
       selection,

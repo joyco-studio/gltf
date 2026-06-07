@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { FileUp, LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 import { ControlsToolbar } from "./controls-toolbar";
-import { FileDropZone, useFilePicker } from "./file-drop-zone";
+import { FileDropZone, parseHttpUrl, useFilePicker } from "./file-drop-zone";
+import { resolveSharePath } from "./share-path";
 import { InspectBanner } from "./inspect-banner";
 import { InspectorPanel } from "./inspector-panel";
 import { SearchCommand } from "./search-command";
@@ -62,6 +64,38 @@ function EmptyState() {
   );
 }
 
+/**
+ * Auto-loads a model from `?url=` once the viewer instance is attached, then
+ * jumps to `?path=` (e.g. `materials.mat_1`) once the document is parsed.
+ */
+function UrlParamLoader() {
+  const { viewer, snapshot, openUrl, jumpTo } = useViewer();
+  const searchParams = useSearchParams();
+  const url = parseHttpUrl(searchParams.get("url") ?? "");
+  const path = searchParams.get("path");
+  const loadedRef = React.useRef<string | null>(null);
+  // guarded by document identity (one jump per loaded model), NOT by path:
+  // in-app selections rewrite ?path and must not re-trigger the jump
+  const jumpedDocRef = React.useRef<typeof snapshot.document>(null);
+
+  React.useEffect(() => {
+    if (!viewer || !url || loadedRef.current === url) return;
+    loadedRef.current = url;
+    openUrl(url);
+  }, [viewer, url, openUrl]);
+
+  React.useEffect(() => {
+    const { document } = snapshot;
+    if (!document || jumpedDocRef.current === document) return;
+    jumpedDocRef.current = document;
+    if (!path) return;
+    const resolved = resolveSharePath(document, path);
+    if (resolved) jumpTo(resolved.selection, resolved.name);
+  }, [snapshot, path, jumpTo]);
+
+  return null;
+}
+
 /** Surfaces load errors that happen while a previous model stays on screen. */
 function ErrorBanner() {
   const { snapshot } = useViewer();
@@ -94,6 +128,10 @@ function ViewerApp() {
         </div>
         <FileDropZone />
         <SearchCommand />
+        {/* useSearchParams needs a Suspense boundary on prerendered routes */}
+        <React.Suspense>
+          <UrlParamLoader />
+        </React.Suspense>
       </div>
     </ViewerProvider>
   );

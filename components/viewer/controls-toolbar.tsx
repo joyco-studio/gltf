@@ -97,26 +97,22 @@ function ControlsToolbar() {
 
         <Cluster bg="accent">
           {AXES.map((axis) => {
-            const lock = controls.axisLock
-            const active = lock?.axis === axis
+            const aligned = controls.alignedAxis
+            const isAligned = aligned?.axis === axis
             return (
               <Tooltip key={axis}>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={active ? 'default' : 'accent'}
+                    variant={isAligned ? 'default' : 'accent'}
                     size="sm"
                     className="font-mono uppercase"
-                    onClick={() => viewer.controls.toggleAxisLock(axis)}
+                    onClick={() => viewer.controls.snapToAxis(axis)}
                   >
-                    {active ? `${lock.sign === 1 ? '+' : '−'}${axis}` : axis}
+                    {isAligned ? `${aligned.sign === 1 ? '+' : '−'}${axis}` : axis}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {active
-                    ? lock.sign === 1
-                      ? `Locked to +${axis.toUpperCase()} — click for −${axis.toUpperCase()}, again to unlock`
-                      : `Locked to −${axis.toUpperCase()} — click to unlock`
-                    : `Lock view to the ${axis.toUpperCase()} axis`}
+                  View from the {axis.toUpperCase()} axis — press again to flip
                 </TooltipContent>
               </Tooltip>
             )

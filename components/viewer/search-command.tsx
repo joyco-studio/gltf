@@ -20,15 +20,7 @@ import { useViewer, type Selection } from "./viewer-provider";
  * a result jumps the contents browser to the matching tab and row.
  */
 function SearchCommand() {
-  const {
-    viewer,
-    snapshot,
-    setTab,
-    setSidebarOpen,
-    select,
-    searchOpen,
-    setSearchOpen,
-  } = useViewer();
+  const { snapshot, jumpTo, searchOpen, setSearchOpen } = useViewer();
   const { document } = snapshot;
 
   React.useEffect(() => {
@@ -42,24 +34,8 @@ function SearchCommand() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setSearchOpen]);
 
-  const jumpTo = (selection: Selection, name: string) => {
-    // show it in the sidebar (re-opening it if collapsed)...
-    setSidebarOpen(true);
-    setTab(
-      selection.kind === "texture"
-        ? "textures"
-        : selection.kind === "animation"
-          ? "animations"
-          : "contents",
-    );
-    select(selection);
-    // ...and trigger the scene effect: animations play (exclusive), every
-    // other kind gets framed + highlighted for inspection (ESC exits)
-    if (selection.kind === "animation") {
-      viewer?.animations.play(selection.id);
-    } else {
-      viewer?.inspectItem(selection.kind, selection.id, name);
-    }
+  const handleSelect = (selection: Selection, name: string) => {
+    jumpTo(selection, name);
     setSearchOpen(false);
   };
 
@@ -84,7 +60,7 @@ function SearchCommand() {
                 <CommandItem
                   key={`mesh-${mesh.id}`}
                   value={`mesh ${mesh.name} ${mesh.id}`}
-                  onSelect={() => jumpTo({ kind: "mesh", id: mesh.id }, mesh.name)}
+                  onSelect={() => handleSelect({ kind: "mesh", id: mesh.id }, mesh.name)}
                 >
                   <Box />
                   {mesh.name}
@@ -103,7 +79,10 @@ function SearchCommand() {
                   key={`material-${material.id}`}
                   value={`material ${material.name} ${material.id}`}
                   onSelect={() =>
-                    jumpTo({ kind: "material", id: material.id }, material.name)
+                    handleSelect(
+                      { kind: "material", id: material.id },
+                      material.name,
+                    )
                   }
                 >
                   <Palette />
@@ -123,7 +102,10 @@ function SearchCommand() {
                   key={`texture-${texture.id}`}
                   value={`texture ${texture.name} ${texture.id}`}
                   onSelect={() =>
-                    jumpTo({ kind: "texture", id: texture.id }, texture.name)
+                    handleSelect(
+                      { kind: "texture", id: texture.id },
+                      texture.name,
+                    )
                   }
                 >
                   <ImageIcon />
@@ -143,7 +125,7 @@ function SearchCommand() {
                   key={`animation-${animation.id}`}
                   value={`animation ${animation.name} ${animation.id}`}
                   onSelect={() =>
-                    jumpTo(
+                    handleSelect(
                       { kind: "animation", id: animation.id },
                       animation.name,
                     )

@@ -1,11 +1,6 @@
 import { Euler, MathUtils, Vector3 } from 'three/webgpu'
 
-import {
-  AXIS_VECTORS,
-  type AxisLock,
-  type CameraControlContext,
-  type CameraControlMode,
-} from './types'
+import type { CameraControlContext, CameraControlMode } from './types'
 
 const LOOK_SENSITIVITY = 0.0022
 const ACCELERATION = 10 // 1/s — how fast velocity converges on input
@@ -37,15 +32,13 @@ function isTypingTarget(target: EventTarget | null) {
 /**
  * Free-flight navigation: pointer-lock mouse look with WASD translation
  * relative to the view (Q/E for down/up), Shift to sprint. Speed scales with
- * the loaded model's world radius, and the wheel trims it. Axis lock fixes
- * the look direction along the axis while translation stays free.
+ * the loaded model's world radius, and the wheel trims it.
  */
 class FlyMode implements CameraControlMode {
   readonly id = 'fly' as const
 
   private context!: CameraControlContext
   private enabled = false
-  private lock: AxisLock | null = null
   private pointerLocked = false
   private yaw = 0
   private pitch = 0
@@ -135,24 +128,7 @@ class FlyMode implements CameraControlMode {
     this.context.worldBounds.clampPoint(camera.position, camera.position)
   }
 
-  applyAxisLock(lock: AxisLock | null) {
-    this.lock = lock
-    if (!lock) return
-
-    // Look along the axis toward the scene, as if standing on the `sign`
-    // side. Translation stays free; only the view direction is pinned.
-    const direction = new Vector3(...AXIS_VECTORS[lock.axis]).multiplyScalar(
-      -lock.sign
-    )
-    this.pitch = Math.asin(MathUtils.clamp(direction.y, -1, 1))
-    this.yaw = Math.atan2(-direction.x, -direction.z)
-  }
-
   syncWithCamera() {
-    if (this.lock) {
-      this.applyAxisLock(this.lock)
-      return
-    }
     const euler = new Euler().setFromQuaternion(
       this.context.camera.quaternion,
       'YXZ'
@@ -187,7 +163,7 @@ class FlyMode implements CameraControlMode {
   }
 
   private handleMouseMove = (event: MouseEvent) => {
-    if (!this.pointerLocked || this.lock) return
+    if (!this.pointerLocked) return
     this.yaw -= event.movementX * LOOK_SENSITIVITY
     this.pitch = MathUtils.clamp(
       this.pitch - event.movementY * LOOK_SENSITIVITY,

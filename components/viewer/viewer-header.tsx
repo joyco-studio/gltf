@@ -57,7 +57,7 @@ function ViewerHeader() {
           </>
         ) : null}
 
-        <Filler />
+        <Filler className="pointer-events-none invisible" />
 
         <Button
           variant="accent"

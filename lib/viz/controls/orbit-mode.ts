@@ -1,25 +1,16 @@
-import { Vector3 } from 'three/webgpu'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-import {
-  AXIS_VECTORS,
-  type AxisLock,
-  type CameraControlContext,
-  type CameraControlMode,
-} from './types'
+import type { CameraControlContext, CameraControlMode } from './types'
 
 /**
  * The typical orbit navigation: polar rotation around the focus point with
- * dolly on wheel (and pan, which moves the shared target). Axis lock snaps
- * the camera onto the axis at the current distance and freezes rotation —
- * dolly/pan stay live.
+ * dolly on wheel (and pan, which moves the shared target).
  */
 class OrbitMode implements CameraControlMode {
   readonly id = 'orbit' as const
 
   private context!: CameraControlContext
   private controls!: OrbitControls
-  private lock: AxisLock | null = null
 
   init(context: CameraControlContext) {
     this.context = context
@@ -49,30 +40,11 @@ class OrbitMode implements CameraControlMode {
     if (this.controls.enabled) this.controls.update()
   }
 
-  applyAxisLock(lock: AxisLock | null) {
-    this.lock = lock
-    this.controls.enableRotate = lock === null
-    if (lock) this.snapToAxis(lock)
-  }
-
   syncWithCamera() {
     // The active camera may have been swapped (projection toggle).
     if (this.controls.object !== this.context.camera) {
       this.controls.object = this.context.camera
     }
-    // Reframing moved the camera/target; re-assert the lock pose if any.
-    if (this.lock) this.snapToAxis(this.lock)
-    this.controls.update()
-  }
-
-  private snapToAxis(lock: AxisLock) {
-    const { camera, target } = this.context
-    const distance = camera.position.distanceTo(target)
-    const direction = new Vector3(...AXIS_VECTORS[lock.axis]).multiplyScalar(
-      lock.sign
-    )
-    camera.position.copy(target).addScaledVector(direction, distance)
-    camera.lookAt(target)
     this.controls.update()
   }
 

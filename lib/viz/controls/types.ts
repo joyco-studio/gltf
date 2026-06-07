@@ -6,12 +6,6 @@ type ControlModeId = 'orbit' | 'fly'
 
 type Axis = 'x' | 'y' | 'z'
 
-interface AxisLock {
-  axis: Axis
-  /** Which side of the axis the camera looks from (+x vs −x, ...). */
-  sign: 1 | -1
-}
-
 /**
  * Shared state handed to every control mode. `target` is the scene focus
  * point — a single Vector3 instance owned by the ControlSystem so modes stay
@@ -45,12 +39,6 @@ interface CameraControlMode {
   /** Mode deactivated. Detach listeners, leave the camera where it is. */
   disable(): void
   update(dt: number): void
-  /**
-   * Honor (or release, when null) an axis lock. Each mode decides what
-   * locking means for its navigation: orbit pins the view onto the axis and
-   * freezes rotation; fly fixes the look direction but keeps translation.
-   */
-  applyAxisLock(lock: AxisLock | null): void
   /** Re-assert pose-dependent state after the camera was reframed. */
   syncWithCamera(): void
   /**
@@ -68,10 +56,4 @@ const AXIS_VECTORS: Record<Axis, [number, number, number]> = {
 }
 
 export { AXIS_VECTORS }
-export type {
-  Axis,
-  AxisLock,
-  CameraControlContext,
-  CameraControlMode,
-  ControlModeId,
-}
+export type { Axis, CameraControlContext, CameraControlMode, ControlModeId }

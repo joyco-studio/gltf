@@ -135,4 +135,4 @@ function useFilePicker() {
   return { input, openPicker }
 }
 
-export { FileDropZone, useFilePicker }
+export { FileDropZone, useFilePicker, parseHttpUrl }
