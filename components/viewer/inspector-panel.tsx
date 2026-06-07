@@ -40,7 +40,7 @@ function SectionTitle({
   )
 }
 
-const DEFAULT_PANEL_WIDTH = 768 // px (48rem)
+const DEFAULT_PANEL_WIDTH = 600 // px
 const MIN_PANEL_WIDTH = 360
 /** Keep the panel from swallowing the 16px right margin. */
 const PANEL_EDGE_MARGIN = 32
