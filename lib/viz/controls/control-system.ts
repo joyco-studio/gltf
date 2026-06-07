@@ -168,6 +168,29 @@ class ControlSystem
     this.publish()
   }
 
+  /**
+   * Quick view reset for any mode: pivot back to the world origin and the
+   * camera back to its home vantage — the whole-model framing when a model
+   * is loaded, or the idle position otherwise.
+   */
+  resetView() {
+    // a reset supersedes any running inspection
+    if (this.inspecting) {
+      this.inspecting = null
+      this.publish()
+    }
+
+    const model = this.viewer.model.current
+    if (model) {
+      this.frame(model.root)
+    } else {
+      this.context.target.set(0, 0, 0)
+      this.context.camera.position.set(4.6, 4.6, 4.6)
+      this.context.camera.lookAt(this.context.target)
+      this.active.syncWithCamera()
+    }
+  }
+
   /** Leave inspection (ESC) and restore the whole-model framing. */
   exitInspect() {
     if (!this.inspecting) return

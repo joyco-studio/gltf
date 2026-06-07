@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Camera, Grid3x3, Orbit, Plane } from 'lucide-react'
+import { Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Cluster } from '@/components/ui/cluster'
@@ -75,6 +75,22 @@ function ControlsToolbar() {
               <TooltipContent side="top">{mode.hint}</TooltipContent>
             </Tooltip>
           ))}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="accent"
+                size="icon-sm"
+                onClick={() => viewer.controls.resetView()}
+              >
+                <LocateFixed />
+                <span className="sr-only">Reset view</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Reset view — re-center pivot and restore the home camera
+            </TooltipContent>
+          </Tooltip>
         </Cluster>
 
         <Separator orientation="vertical" className="h-auto self-stretch [--thickness:0.5px]" />
