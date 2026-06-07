@@ -16,15 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-
+      # Uses the runner's preinstalled node/npm — no setup cost on the
+      # common path where three is already up to date.
       - name: Check latest three release
         id: three
         run: |
@@ -39,6 +32,23 @@ jobs:
             echo "outdated=false" >> "$GITHUB_OUTPUT"
             echo "three is up to date ($CURRENT)"
           fi
+
+      # Everything below only runs on bump days.
+      - uses: pnpm/action-setup@v4
+        if: steps.three.outputs.outdated == 'true'
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        if: steps.three.outputs.outdated == 'true'
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        if: steps.three.outputs.outdated == 'true'
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
 
       - name: Bump three and @types/three
         if: steps.three.outputs.outdated == 'true'
