@@ -1,4 +1,4 @@
-import { Euler, MathUtils, Vector3 } from 'three'
+import { Euler, MathUtils, Vector3 } from 'three/webgpu'
 
 import {
   AXIS_VECTORS,

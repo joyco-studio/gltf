@@ -3,7 +3,7 @@ import {
   OrthographicCamera,
   PerspectiveCamera,
   type Vector3,
-} from 'three'
+} from 'three/webgpu'
 
 import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'

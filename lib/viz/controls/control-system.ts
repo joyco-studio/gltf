@@ -1,4 +1,4 @@
-import { Box3, Vector3, type Object3D } from 'three'
+import { Box3, Vector3, type Object3D } from 'three/webgpu'
 
 import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'
@@ -14,12 +14,20 @@ import type {
   ControlModeId,
 } from './types'
 
+interface InspectTarget {
+  kind: 'mesh'
+  id: number
+  name: string
+}
+
 interface ControlsSnapshot {
   mode: ControlModeId
   axisLock: AxisLock | null
   /** True while fly mode owns the pointer (mouse look engaged). */
   pointerLocked: boolean
   projection: ProjectionMode
+  /** Item currently framed for close inspection, if any. */
+  inspecting: InspectTarget | null
 }
 
 const DEFAULT_SNAPSHOT: ControlsSnapshot = {
@@ -27,6 +35,7 @@ const DEFAULT_SNAPSHOT: ControlsSnapshot = {
   axisLock: null,
   pointerLocked: false,
   projection: 'perspective',
+  inspecting: null,
 }
 
 /**
@@ -44,6 +53,7 @@ class ControlSystem
   private modes = new Map<ControlModeId, CameraControlMode>()
   private active!: CameraControlMode
   private axisLock: AxisLock | null = null
+  private inspecting: InspectTarget | null = null
   private snapshot: ControlsSnapshot = DEFAULT_SNAPSHOT
 
   private readonly canvas: HTMLCanvasElement
@@ -133,23 +143,56 @@ class ControlSystem
     const box = new Box3().setFromObject(object)
     if (box.isEmpty()) return
 
+    // a fresh frame (e.g. new model) supersedes any running inspection
+    if (this.inspecting) {
+      this.inspecting = null
+      this.publish()
+    }
+
+    const maxSize = this.moveToBox(box)
+    this.context.worldRadius = Math.max(maxSize / 2, 0.001)
+    this.viewer.grid.fit(this.context.worldRadius)
+    this.active.syncWithCamera()
+  }
+
+  /**
+   * Enter inspection: orbit the given item, focus its world box and fit the
+   * camera to an inspect radius computed from the item's own extents.
+   */
+  inspect(target: InspectTarget, box: Box3) {
+    this.setMode('orbit')
+    this.moveToBox(box, 1.6)
+    this.active.syncWithCamera()
+    this.inspecting = target
+    this.publish()
+  }
+
+  /** Leave inspection (ESC) and restore the whole-model framing. */
+  exitInspect() {
+    if (!this.inspecting) return
+    this.inspecting = null
+    const model = this.viewer.model.current
+    if (model) this.frame(model.root)
+    this.publish()
+  }
+
+  /** Focus the shared target on a box and fit the camera to it. */
+  private moveToBox(box: Box3, fitFactor = 1.5) {
     const { camera, target } = this.context
     const center = box.getCenter(new Vector3())
     const size = box.getSize(new Vector3())
-    const maxSize = Math.max(size.x, size.y, size.z)
+    const maxSize = Math.max(size.x, size.y, size.z, 0.001)
 
-    const distance = this.viewer.camera.fitDistance(maxSize) * 1.5
+    const distance = this.viewer.camera.fitDistance(maxSize) * fitFactor
 
     this.viewer.camera.setFrame(distance)
     camera.position
       .copy(center)
       .add(new Vector3(1, 0.6, 1).normalize().multiplyScalar(distance))
     camera.lookAt(center)
-
     target.copy(center)
-    this.context.worldRadius = Math.max(maxSize / 2, 0.001)
-    this.viewer.grid.fit(this.context.worldRadius)
-    this.active.syncWithCamera()
+
+    return maxSize
   }
 
   update(dt: number) {
@@ -163,6 +206,7 @@ class ControlSystem
       axisLock: this.axisLock,
       pointerLocked: fly?.isPointerLocked ?? false,
       projection: this.viewer.camera.mode,
+      inspecting: this.inspecting,
     }
     this.emit('change', this.snapshot)
   }
@@ -175,4 +219,4 @@ class ControlSystem
 }
 
 export { ControlSystem, DEFAULT_SNAPSHOT as DEFAULT_CONTROLS_SNAPSHOT }
-export type { ControlsSnapshot }
+export type { ControlsSnapshot, InspectTarget }

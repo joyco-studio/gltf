@@ -32,7 +32,10 @@ function ViewerHeader() {
 
         {document ? (
           <>
-            <Separator orientation="vertical" className="h-auto self-stretch [--thickness:0.5px]" />
+            <Separator
+              orientation="vertical"
+              className="h-auto self-stretch [--thickness:0.5px]"
+            />
             <div className="flex min-w-0 items-center gap-2 self-stretch px-3 font-mono text-xs text-muted-foreground">
               <span className="max-w-48 truncate text-foreground">
                 {document.fileName}
@@ -60,9 +63,12 @@ function ViewerHeader() {
           size="sm"
           onClick={() => setSearchOpen(true)}
           disabled={!document}
+          className="min-w-40 justify-between"
         >
-          <Search />
-          Search
+          <div className="flex gap-x-2">
+            <Search />
+            Search
+          </div>
           <KbdGroup>
             <Kbd>⌘</Kbd>
             <Kbd>K</Kbd>
@@ -72,7 +78,10 @@ function ViewerHeader() {
           <Upload />
           Open
         </Button>
-        <Separator orientation="vertical" className="h-auto self-stretch [--thickness:0.5px]" />
+        <Separator
+          orientation="vertical"
+          className="h-auto self-stretch [--thickness:0.5px]"
+        />
         <ThemeToggle variant="accent" size="icon-sm" />
         {input}
       </Cluster>

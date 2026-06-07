@@ -1,4 +1,4 @@
-import type { Box3, Vector3 } from 'three'
+import type { Box3, Vector3 } from 'three/webgpu'
 
 import type { ViewerCamera } from '../systems/camera-system'
 

@@ -1,4 +1,4 @@
-import { LoadingManager } from 'three'
+import { LoadingManager } from 'three/webgpu'
 
 /**
  * Resolves a set of user-provided files (drag & drop or file picker) into a

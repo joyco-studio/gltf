@@ -28,7 +28,7 @@ function SectionTitle({
   count: number
 }) {
   return (
-    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="flex items-center bg-muted/50 gap-2 px-4 p-2">
       <h2 className="font-heading text-sm font-semibold uppercase tracking-wide">
         {children}
       </h2>
@@ -56,6 +56,18 @@ function InspectorPanel() {
   const [width, setWidth] = React.useState(DEFAULT_PANEL_WIDTH)
   const [resizing, setResizing] = React.useState(false)
   const { document } = snapshot
+
+  // ⌃B / ⌘B toggles the sidebar (the editor-familiar binding)
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'b' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault()
+        setOpen((value) => !value)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -88,7 +100,7 @@ function InspectorPanel() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="outline"
+            variant="secondary"
             size="icon-sm"
             onClick={() => setOpen(true)}
             className="pointer-events-auto absolute top-0 left-4 z-30"
@@ -97,7 +109,7 @@ function InspectorPanel() {
             <span className="sr-only">Show contents browser</span>
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="right">Show contents</TooltipContent>
+        <TooltipContent side="right">Show contents · ⌃B</TooltipContent>
       </Tooltip>
     )
   }
@@ -137,15 +149,17 @@ function InspectorPanel() {
                 <span className="sr-only">Hide contents browser</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">Hide contents</TooltipContent>
+            <TooltipContent side="right">Hide contents · ⌃B</TooltipContent>
           </Tooltip>
         </div>
 
         <TabsContent value="contents" className="min-h-0">
-          <ScrollArea className="h-full">
+          {/* radix's viewport wrapper is display:table (inline style), which
+              lets wide tables blow past the panel instead of x-scrolling in
+              their own containers — force it back to block */}
+          <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <SectionTitle count={document.meshes.length}>Meshes</SectionTitle>
             <MeshesTable meshes={document.meshes} />
-            <Separator className="my-2" />
             <SectionTitle count={document.materials.length}>
               Materials
             </SectionTitle>
@@ -154,7 +168,7 @@ function InspectorPanel() {
         </TabsContent>
 
         <TabsContent value="textures" className="min-h-0">
-          <ScrollArea className="h-full">
+          <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <TexturesGrid textures={document.textures} />
           </ScrollArea>
         </TabsContent>
@@ -169,8 +183,10 @@ function InspectorPanel() {
         onDoubleClick={() => setWidth(DEFAULT_PANEL_WIDTH)}
         className={cn(
           'absolute top-0 -right-1 bottom-0 w-2 cursor-col-resize touch-none select-none',
-          'after:absolute after:inset-y-0 after:right-1 after:w-px after:bg-transparent after:transition-colors hover:after:bg-primary/60',
-          resizing && 'after:bg-primary'
+          // right-[3px] (not 4) — absolute children anchor to the padding
+          // box, so the extra 1px lands the line on the border itself
+          'after:absolute after:inset-y-0 after:right-[3px] after:w-px after:bg-transparent after:transition-colors hover:after:bg-foreground/60',
+          resizing && 'after:bg-foreground'
         )}
       />
     </aside>

@@ -1,4 +1,4 @@
-import { Clock, Scene } from 'three'
+import { Clock, Scene } from 'three/webgpu'
 
 import { ControlSystem } from './controls/control-system'
 import { EventEmitter } from './event-emitter'
@@ -8,6 +8,7 @@ import { BoundsSystem } from './systems/bounds-system'
 import { CameraSystem } from './systems/camera-system'
 import { EnvironmentSystem } from './systems/environment-system'
 import { GridSystem } from './systems/grid-system'
+import { HighlightSystem } from './systems/highlight-system'
 import { ModelSystem, type LoadedModel } from './systems/model-system'
 import { RenderSystem } from './systems/render-system'
 
@@ -43,6 +44,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly grid: GridSystem
   readonly bounds: BoundsSystem
   readonly model: ModelSystem
+  readonly highlight: HighlightSystem
 
   private systems: System[]
   private clock = new Clock()
@@ -60,6 +62,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.grid = new GridSystem()
     this.bounds = new BoundsSystem()
     this.model = new ModelSystem()
+    this.highlight = new HighlightSystem()
 
     // update order: controls (navigation) → bounds (reads camera) → render last
     this.systems = [
@@ -69,6 +72,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.grid,
       this.bounds,
       this.model,
+      this.highlight,
       this.render,
     ]
     for (const system of this.systems) system.init?.(this)
@@ -107,6 +111,13 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.frameHandle = null
     }
     this.clock.stop()
+  }
+
+  /** Frame a glTF mesh for close inspection (no-op if it has no geometry). */
+  inspectMesh(id: number, name: string) {
+    const box = this.model.getMeshWorldBox(id)
+    if (!box) return
+    this.controls.inspect({ kind: 'mesh', id, name }, box)
   }
 
   async loadFiles(files: File[]) {

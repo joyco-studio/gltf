@@ -1,14 +1,13 @@
 import {
-  GridHelper,
   Group,
   InstancedMesh,
   Matrix4,
-  MeshBasicMaterial,
+  MeshBasicNodeMaterial,
   PlaneGeometry,
   Quaternion,
   Vector3,
-  type LineBasicMaterial,
-} from 'three'
+} from 'three/webgpu'
+import { color, float } from 'three/tsl'
 
 import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'
@@ -19,16 +18,30 @@ const GRID_COLOR = '#bbbbbb'
 const GRID_OPACITY = 0.28
 const GRID_SIZE = 100
 const GRID_DIVISIONS = 100
+// wide enough to survive AA coverage at the idle viewing distance — quad
+// lines thin with perspective, unlike the constant-1px raster of GridHelper
+const GRID_LINE_WIDTH = 0.005
 // crosses sit at every other grid intersection, skipping the origin
 const CROSS_COUNT = 23
 const CROSS_LINE_WIDTH = 0.026
 const CROSS_HEIGHT = 0.5
 
+const FLAT = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2)
+const UNIT = new Vector3(1, 1, 1)
+
+/** Lay a plane flat on the ground, spun by `roll` within the ground plane. */
+function flatQuaternion(roll: number) {
+  return new Quaternion()
+    .setFromAxisAngle(new Vector3(0, 0, 1), roll)
+    .premultiply(FLAT)
+}
+
 /**
- * Floor grid ported from the joyco scissor-clip experiment's FloorGrid
- * (r3f/drei there, plain three.js here): a GridHelper backed by instanced
- * "+" crosses at every other intersection, with the very center kept clear.
- * Shown by default; the UI toggles it through the same snapshot/event
+ * Floor grid ported from the joyco scissor-clip experiment's FloorGrid:
+ * grid lines + instanced "+" crosses at every other intersection, with the
+ * very center kept clear. Both lines and crosses are instanced thin quads —
+ * line primitives are unreliable across WebGPU/WebGL backends, planes are
+ * not. Shown by default; the UI toggles it through the same snapshot/event
  * pattern as the other systems.
  */
 class GridSystem extends EventEmitter<{ change: boolean }> implements System {
@@ -60,44 +73,55 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
     this.group.scale.setScalar(Math.max(worldRadius / 8, 1))
   }
 
+  private createMaterial() {
+    // explicit node slots — classic-material opacity conversion proved
+    // unreliable across backends
+    const material = new MeshBasicNodeMaterial({
+      depthWrite: false,
+      transparent: true,
+    })
+    material.colorNode = color(GRID_COLOR)
+    material.opacityNode = float(GRID_OPACITY)
+    this.disposables.push(material)
+    return material
+  }
+
   private buildLines() {
-    const grid = new GridHelper(
-      GRID_SIZE,
-      GRID_DIVISIONS,
-      GRID_COLOR,
-      GRID_COLOR
-    )
-    // GridHelper bakes colors into vertex colors — disable and drive the
-    // material color directly, like the source experiment does.
-    const material = grid.material as LineBasicMaterial
-    material.vertexColors = false
-    material.color.set(GRID_COLOR)
-    material.transparent = true
-    material.opacity = GRID_OPACITY
-    material.needsUpdate = true
-    grid.position.y = -0.02
-    grid.renderOrder = 0
-    this.disposables.push(grid.geometry, material)
-    return grid
+    const geometry = new PlaneGeometry(GRID_SIZE, GRID_LINE_WIDTH)
+    const count = (GRID_DIVISIONS + 1) * 2
+    const mesh = new InstancedMesh(geometry, this.createMaterial(), count)
+
+    const matrix = new Matrix4()
+    const step = GRID_SIZE / GRID_DIVISIONS
+    let index = 0
+
+    for (let i = 0; i <= GRID_DIVISIONS; i += 1) {
+      const offset = -GRID_SIZE / 2 + i * step
+      // line along X at z = offset
+      matrix.compose(new Vector3(0, -0.02, offset), flatQuaternion(0), UNIT)
+      mesh.setMatrixAt(index++, matrix)
+      // line along Z at x = offset
+      matrix.compose(
+        new Vector3(offset, -0.02, 0),
+        flatQuaternion(Math.PI / 2),
+        UNIT
+      )
+      mesh.setMatrixAt(index++, matrix)
+    }
+
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.renderOrder = 0
+    this.disposables.push(geometry, mesh)
+    return mesh
   }
 
   private buildCrosses() {
     const geometry = new PlaneGeometry(CROSS_LINE_WIDTH, CROSS_HEIGHT)
-    const material = new MeshBasicMaterial({
-      color: GRID_COLOR,
-      depthWrite: false,
-      transparent: true,
-      opacity: GRID_OPACITY,
-    })
-
     const center = Math.floor(CROSS_COUNT / 2)
     const count = (CROSS_COUNT * CROSS_COUNT - 1) * 2 // 2 planes per "+"
-    const mesh = new InstancedMesh(geometry, material, count)
+    const mesh = new InstancedMesh(geometry, this.createMaterial(), count)
 
     const matrix = new Matrix4()
-    const quaternion = new Quaternion()
-    const flat = new Quaternion()
-    const scale = new Vector3(1, 1, 1)
     let index = 0
 
     for (let y = 0; y < CROSS_COUNT; y += 1) {
@@ -110,20 +134,15 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
           y * 2 - center * 2
         )
         for (const roll of [0, Math.PI / 2]) {
-          // lay the plane flat, then spin it in-plane to form the "+"
-          quaternion
-            .setFromAxisAngle(new Vector3(0, 0, 1), roll)
-            .premultiply(flat.setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2))
-          matrix.compose(position, quaternion, scale)
-          mesh.setMatrixAt(index, matrix)
-          index += 1
+          matrix.compose(position, flatQuaternion(roll), UNIT)
+          mesh.setMatrixAt(index++, matrix)
         }
       }
     }
 
     mesh.instanceMatrix.needsUpdate = true
     mesh.renderOrder = 1
-    this.disposables.push(geometry, material, mesh)
+    this.disposables.push(geometry, mesh)
     return mesh
   }
 

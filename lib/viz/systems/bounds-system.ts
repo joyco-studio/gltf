@@ -2,11 +2,29 @@ import {
   BackSide,
   Box3,
   BoxGeometry,
-  Color,
   Mesh,
-  ShaderMaterial,
+  MeshBasicNodeMaterial,
   Vector3,
-} from 'three'
+  type Node,
+} from 'three/webgpu'
+import {
+  abs,
+  cameraPosition,
+  ceil,
+  clamp,
+  color,
+  exp2,
+  float,
+  fract,
+  fwidth,
+  log2,
+  max,
+  normalLocal,
+  positionWorld,
+  screenDPR,
+  select,
+  smoothstep,
+} from 'three/tsl'
 
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -28,76 +46,73 @@ const STRIPE_WIDTH_PX = 1.75
 const STRIPE_BASE_PERIOD = 0.5
 const WARN_COLOR = '#ff3b30'
 
-const vertexShader = /* glsl */ `
-  varying vec3 vWorldPos;
-  varying vec3 vNormal;
+/**
+ * TSL build of the wall shader: proximity fade, world-anchored 45° stripes
+ * with adaptive power-of-2 LOD pinned to a fixed pixel rhythm, heating from
+ * grid-gray to red on approach. cameraPosition/screenDPR are builtins, so
+ * the material needs no per-frame uniform updates.
+ */
+function createWallMaterial() {
+  const material = new MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: BackSide, // walls face inward — visible from inside the box
+    fog: false, // proximity drives visibility, not scene fog
+  })
 
-  void main() {
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    vWorldPos = worldPos.xyz;
-    vNormal = normalize(mat3(modelMatrix) * normal);
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  // fade the wall in as the camera approaches this fragment
+  const dist = positionWorld.sub(cameraPosition).length()
+  const proximity = smoothstep(
+    float(FADE_RANGE * 0.2),
+    float(FADE_RANGE),
+    dist
+  ).oneMinus()
+
+  // 45° diagonal coordinate in the wall plane (world-anchored — stripes
+  // parallax with the wall). The normal axis is constant, mask it out.
+  const nrm = abs(normalLocal)
+  const planeUV = select(
+    nrm.x.greaterThan(0.5),
+    positionWorld.yz,
+    select(nrm.y.greaterThan(0.5), positionWorld.xz, positionWorld.xy)
+  )
+  const diag = planeUV.x.add(planeUV.y).mul(0.7071)
+
+  // adaptive LOD: pick the power-of-2 world period that lands closest to
+  // the target pixel rhythm, cross-fading finer stripes in on approach
+  const stripePx = float(STRIPE_SPACING_PX).mul(screenDPR)
+  const linePx = float(STRIPE_WIDTH_PX).mul(screenDPR)
+  const unitsPerPx = max(fwidth(diag), 1e-6)
+  const t = log2(stripePx.mul(unitsPerPx).div(STRIPE_BASE_PERIOD))
+  const lod = ceil(t)
+  const periodCoarse = exp2(lod).mul(STRIPE_BASE_PERIOD)
+  const refine = clamp(lod.sub(t), 0, 1)
+
+  // crisp line of linePx pixels around each multiple of period
+  const stripeMask = (period: Node<'float'>) => {
+    const distPx = abs(fract(diag.div(period).sub(0.5)).sub(0.5))
+      .mul(period)
+      .div(unitsPerPx)
+    return smoothstep(linePx.mul(0.5), linePx, distPx).oneMinus()
   }
-`
 
-const fragmentShader = /* glsl */ `
-  uniform vec3 uColorFar;
-  uniform vec3 uColorNear;
-  uniform vec3 uCameraPos;
-  uniform float uFadeRange;
-  uniform float uStripePx;
-  uniform float uLinePx;
-  uniform float uBasePeriod;
+  const line = max(
+    stripeMask(periodCoarse),
+    stripeMask(periodCoarse.mul(0.5)).mul(refine)
+  )
 
-  varying vec3 vWorldPos;
-  varying vec3 vNormal;
-
-  // crisp line of widthPx pixels around each multiple of period
-  float stripeMask(float coord, float period, float unitsPerPx, float widthPx) {
-    float distPx =
-      abs(fract(coord / period - 0.5) - 0.5) * period / unitsPerPx;
-    return 1.0 - smoothstep(widthPx * 0.5, widthPx, distPx);
-  }
-
-  void main() {
-    // fade the wall in as the camera approaches this fragment
-    float dist = distance(uCameraPos, vWorldPos);
-    float proximity = 1.0 - smoothstep(uFadeRange * 0.2, uFadeRange, dist);
-    if (proximity <= 0.001) discard;
-
-    // 45° diagonal coordinate in the wall plane (world-anchored — stripes
-    // parallax with the wall). The normal axis is constant, mask it out.
-    vec3 nrm = abs(vNormal);
-    vec2 planeUV = nrm.x > 0.5
-      ? vWorldPos.yz
-      : (nrm.y > 0.5 ? vWorldPos.xz : vWorldPos.xy);
-    float diag = (planeUV.x + planeUV.y) * 0.7071;
-
-    // adaptive LOD: pick the power-of-2 world period that lands closest to
-    // the target pixel rhythm, cross-fading finer stripes in on approach
-    float unitsPerPx = max(fwidth(diag), 1e-6);
-    float t = log2(uStripePx * unitsPerPx / uBasePeriod);
-    float lod = ceil(t);
-    float periodCoarse = uBasePeriod * exp2(lod);
-    float refine = clamp(lod - t, 0.0, 1.0);
-
-    float line = max(
-      stripeMask(diag, periodCoarse, unitsPerPx, uLinePx),
-      stripeMask(diag, periodCoarse * 0.5, unitsPerPx, uLinePx) * refine
-    );
-
-    // grid-gray at the fade horizon, mixing to warning red on approach
-    vec3 color = mix(uColorFar, uColorNear, proximity);
-    float alpha = proximity * mix(0.04, 0.9, line);
-    gl_FragColor = vec4(color, alpha);
-  }
-`
+  // grid-gray at the fade horizon, mixing to warning red on approach
+  material.colorNode = color(GRID_COLOR)
+    .mul(proximity.oneMinus())
+    .add(color(WARN_COLOR).mul(proximity))
+  material.opacityNode = proximity.mul(line.mul(0.86).add(0.04))
+  return material
+}
 
 /**
  * The navigable world bounds. Navigation modes clamp the camera against
  * `clampBox` (inset by WALL_CLEARANCE); the visual walls at ±15 render as
- * proximity-fading 45° stripes that heat from grid-gray to red as you near
- * the limit.
+ * proximity-fading 45° stripes that heat from grid-gray to red.
  */
 class BoundsSystem implements System {
   /** Visual wall box. */
@@ -108,31 +123,11 @@ class BoundsSystem implements System {
   /** Camera clamp box — the wall box inset so the near plane never culls it. */
   readonly clampBox = this.box.clone().expandByScalar(-WALL_CLEARANCE)
 
-  private viewer!: Viewer
   private mesh!: Mesh
-  private material!: ShaderMaterial
+  private material!: MeshBasicNodeMaterial
 
   init(viewer: Viewer) {
-    this.viewer = viewer
-
-    this.material = new ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      uniforms: {
-        uColorFar: { value: new Color(GRID_COLOR) },
-        uColorNear: { value: new Color(WARN_COLOR) },
-        uCameraPos: { value: new Vector3() },
-        uFadeRange: { value: FADE_RANGE },
-        uStripePx: { value: STRIPE_SPACING_PX },
-        uLinePx: { value: STRIPE_WIDTH_PX },
-        uBasePeriod: { value: STRIPE_BASE_PERIOD },
-      },
-      transparent: true,
-      depthWrite: false,
-      side: BackSide, // walls face inward — visible from inside the box
-      fog: false, // proximity drives visibility, not scene fog
-    })
-
+    this.material = createWallMaterial()
     this.mesh = new Mesh(
       new BoxGeometry(
         WORLD_HALF_EXTENT * 2,
@@ -145,17 +140,6 @@ class BoundsSystem implements System {
     this.mesh.renderOrder = 2
     this.mesh.frustumCulled = false
     viewer.scene.add(this.mesh)
-  }
-
-  update() {
-    const uniform = this.material.uniforms.uCameraPos.value as Vector3
-    uniform.copy(this.viewer.camera.camera.position)
-  }
-
-  resize(_width: number, _height: number, dpr: number) {
-    // gl_FragCoord is in device pixels — keep the rhythm in CSS pixels
-    this.material.uniforms.uStripePx.value = STRIPE_SPACING_PX * dpr
-    this.material.uniforms.uLinePx.value = STRIPE_WIDTH_PX * dpr
   }
 
   dispose() {

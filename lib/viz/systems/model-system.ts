@@ -1,4 +1,5 @@
 import {
+  Box3,
   Group,
   Material,
   Mesh,
@@ -6,7 +7,7 @@ import {
   Texture,
   type LoadingManager,
   type Object3D,
-} from 'three'
+} from 'three/webgpu'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
@@ -63,7 +64,10 @@ class ModelSystem implements System {
     viewer.scene.add(this.container)
   }
 
-  private createLoader(manager?: LoadingManager) {
+  private async createLoader(manager?: LoadingManager) {
+    // KTX2 support detection inspects the backend — renderer must be ready
+    await this.viewer.render.whenReady
+
     if (!this.dracoLoader) {
       this.dracoLoader = new DRACOLoader().setDecoderPath(DRACO_DECODER_PATH)
     }
@@ -88,7 +92,7 @@ class ModelSystem implements System {
     }
 
     const loadId = ++this.loadId
-    const loader = this.createLoader(fileSet.manager)
+    const loader = await this.createLoader(fileSet.manager)
 
     try {
       const gltf = await loader.loadAsync(fileSet.rootUrl)
@@ -105,13 +109,41 @@ class ModelSystem implements System {
 
   async loadUrl(url: string) {
     const loadId = ++this.loadId
-    const loader = this.createLoader()
+    const loader = await this.createLoader()
     const gltf = await loader.loadAsync(url)
     if (loadId !== this.loadId) {
       disposeObject(gltf.scene)
       return null
     }
     return this.swap(gltf, url.split('/').pop() ?? url)
+  }
+
+  /**
+   * Every renderable belonging to a glTF mesh (by document mesh index, via
+   * the parser's object associations).
+   */
+  getMeshObjects(meshId: number): Mesh[] {
+    if (!this.current) return []
+
+    const associations = this.current.gltf.parser.associations
+    const meshes: Mesh[] = []
+    this.current.root.traverse((object) => {
+      if (!(object instanceof Mesh)) return
+      if (associations.get(object)?.meshes !== meshId) return
+      meshes.push(object)
+    })
+    return meshes
+  }
+
+  /** World-space bounding box of every renderable of a glTF mesh. */
+  getMeshWorldBox(meshId: number): Box3 | null {
+    const meshes = this.getMeshObjects(meshId)
+    if (meshes.length === 0) return null
+
+    this.current?.root.updateWorldMatrix(true, true)
+    const box = new Box3()
+    for (const mesh of meshes) box.expandByObject(mesh)
+    return box.isEmpty() ? null : box
   }
 
   private swap(gltf: GLTF, fileName: string) {

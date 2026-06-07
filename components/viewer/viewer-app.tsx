@@ -8,6 +8,7 @@ import { Kbd, KbdGroup } from '@/components/ui/kbd'
 
 import { ControlsToolbar } from './controls-toolbar'
 import { FileDropZone, useFilePicker } from './file-drop-zone'
+import { InspectBanner } from './inspect-banner'
 import { InspectorPanel } from './inspector-panel'
 import { SearchCommand } from './search-command'
 import { ViewerCanvas } from './viewer-canvas'
@@ -30,7 +31,7 @@ function EmptyState() {
 
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center">
-      <div className="pointer-events-auto flex flex-col items-center gap-4 border border-dashed bg-background/85 px-12 py-10 text-center backdrop-blur-sm">
+      <div className="pointer-events-auto flex flex-col items-center gap-4 border border-dashed bg-background/85 px-12 py-10 text-center backdrop-blur-xs">
         <FileUp className="size-8 text-muted-foreground" />
         <div className="flex flex-col gap-1">
           <p className="font-heading text-sm font-semibold uppercase tracking-wide">
@@ -87,6 +88,7 @@ function ViewerApp() {
             <EmptyState />
             <InspectorPanel />
             <ControlsToolbar />
+            <InspectBanner />
             <ErrorBanner />
           </div>
         </div>

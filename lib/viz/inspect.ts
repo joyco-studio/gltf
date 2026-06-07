@@ -1,5 +1,5 @@
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
-import type { Texture } from 'three'
+import type { Texture } from 'three/webgpu'
 
 /**
  * Normalized, UI-friendly snapshot of a glTF document. Built once per load

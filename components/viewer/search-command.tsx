@@ -20,7 +20,8 @@ import { useViewer, type Selection } from "./viewer-provider";
  * a result jumps the contents browser to the matching tab and row.
  */
 function SearchCommand() {
-  const { snapshot, setTab, select, searchOpen, setSearchOpen } = useViewer();
+  const { viewer, snapshot, setTab, select, searchOpen, setSearchOpen } =
+    useViewer();
   const { document } = snapshot;
 
   React.useEffect(() => {
@@ -34,9 +35,13 @@ function SearchCommand() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setSearchOpen]);
 
-  const jumpTo = (selection: Selection) => {
+  const jumpTo = (selection: Selection, name?: string) => {
     setTab(selection.kind === "texture" ? "textures" : "contents");
     select(selection);
+    // meshes get framed for close inspection (ESC exits)
+    if (selection.kind === "mesh" && name !== undefined) {
+      viewer?.inspectMesh(selection.id, name);
+    }
     setSearchOpen(false);
   };
 
@@ -46,7 +51,7 @@ function SearchCommand() {
       onOpenChange={setSearchOpen}
       title="Search glTF contents"
       description="Fuzzy search meshes, materials and textures by name"
-      className="sm:min-w-xl sm:max-w-xl"
+      className="sm:min-w-sm sm:max-w-sm"
     >
       <Command>
         <CommandInput placeholder="Search meshes, materials, textures..." />
@@ -61,7 +66,7 @@ function SearchCommand() {
                 <CommandItem
                   key={`mesh-${mesh.id}`}
                   value={`mesh ${mesh.name} ${mesh.id}`}
-                  onSelect={() => jumpTo({ kind: "mesh", id: mesh.id })}
+                  onSelect={() => jumpTo({ kind: "mesh", id: mesh.id }, mesh.name)}
                 >
                   <Box />
                   {mesh.name}
