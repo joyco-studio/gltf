@@ -1,0 +1,62 @@
+name: Bump three.js
+
+on:
+  schedule:
+    # Daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Check latest three release
+        id: three
+        run: |
+          CURRENT=$(node -p "require('./package.json').dependencies.three.replace(/^[^0-9]*/, '')")
+          LATEST=$(npm view three version)
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "release=r$(echo "$LATEST" | cut -d. -f2)" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "outdated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            echo "three is up to date ($CURRENT)"
+          fi
+
+      - name: Bump three and @types/three
+        if: steps.three.outputs.outdated == 'true'
+        run: |
+          # --latest rewrites the semver range in package.json, not just the lockfile.
+          # @types/three is bumped to its own latest — it can lag a release behind three.
+          pnpm update --latest three @types/three
+
+      - name: Create or update bump PR
+        if: steps.three.outputs.outdated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/bump-three
+          title: "chore: bump three.js to ${{ steps.three.outputs.latest }}"
+          commit-message: "chore: bump three.js to ${{ steps.three.outputs.latest }}"
+          body: |
+            Automated bump of `three` from `${{ steps.three.outputs.current }}` to `${{ steps.three.outputs.latest }}` (with `@types/three` at its latest available release).
+
+            Release notes: https://github.com/mrdoob/three.js/releases/tag/${{ steps.three.outputs.release }}
+          labels: dependencies
+          delete-branch: true

@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { formatNumber } from "@/lib/format";
 
 import { useFilePicker } from "./file-drop-zone";
+import { InfoPopover } from "./info-popover";
 import { useViewer } from "./viewer-provider";
 
 function ViewerHeader() {
@@ -83,6 +84,7 @@ function ViewerHeader() {
           className="h-auto self-stretch [--thickness:0.5px]"
         />
         <ThemeToggle variant="accent" size="icon-sm" />
+        <InfoPopover />
         {input}
       </Cluster>
     </header>
