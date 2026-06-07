@@ -118,26 +118,71 @@ class ModelSystem implements System {
     return this.swap(gltf, url.split('/').pop() ?? url)
   }
 
+  private get associations() {
+    return this.current?.gltf.parser.associations
+  }
+
+  private collectMeshes(predicate: (mesh: Mesh) => boolean): Mesh[] {
+    if (!this.current) return []
+    const meshes: Mesh[] = []
+    this.current.root.traverse((object) => {
+      if (object instanceof Mesh && predicate(object)) meshes.push(object)
+    })
+    return meshes
+  }
+
+  private materialsOf(mesh: Mesh): Material[] {
+    return Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+  }
+
+  /** glTF document index of a runtime material, if it came from the file. */
+  getMaterialId(material: Material): number | undefined {
+    return this.associations?.get(material)?.materials
+  }
+
+  /** Whether a runtime material samples the glTF texture with this index. */
+  materialUsesTexture(material: Material, textureId: number): boolean {
+    for (const value of Object.values(material)) {
+      if (
+        value instanceof Texture &&
+        this.associations?.get(value)?.textures === textureId
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   /**
    * Every renderable belonging to a glTF mesh (by document mesh index, via
    * the parser's object associations).
    */
   getMeshObjects(meshId: number): Mesh[] {
-    if (!this.current) return []
-
-    const associations = this.current.gltf.parser.associations
-    const meshes: Mesh[] = []
-    this.current.root.traverse((object) => {
-      if (!(object instanceof Mesh)) return
-      if (associations.get(object)?.meshes !== meshId) return
-      meshes.push(object)
-    })
-    return meshes
+    return this.collectMeshes(
+      (mesh) => this.associations?.get(mesh)?.meshes === meshId
+    )
   }
 
-  /** World-space bounding box of every renderable of a glTF mesh. */
-  getMeshWorldBox(meshId: number): Box3 | null {
-    const meshes = this.getMeshObjects(meshId)
+  /** Every renderable with at least one primitive using a glTF material. */
+  getMeshesUsingMaterial(materialId: number): Mesh[] {
+    return this.collectMeshes((mesh) =>
+      this.materialsOf(mesh).some(
+        (material) => this.getMaterialId(material) === materialId
+      )
+    )
+  }
+
+  /** Every renderable whose material(s) sample a glTF texture. */
+  getMeshesUsingTexture(textureId: number): Mesh[] {
+    return this.collectMeshes((mesh) =>
+      this.materialsOf(mesh).some((material) =>
+        this.materialUsesTexture(material, textureId)
+      )
+    )
+  }
+
+  /** Combined world-space bounding box of a set of renderables. */
+  getWorldBoxOfMeshes(meshes: Mesh[]): Box3 | null {
     if (meshes.length === 0) return null
 
     this.current?.root.updateWorldMatrix(true, true)
@@ -155,6 +200,7 @@ class ModelSystem implements System {
     this.container.add(gltf.scene)
     this.current = { gltf, root: gltf.scene, fileName }
     this.viewer.controls.frame(gltf.scene)
+    this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
     return this.current
   }
 

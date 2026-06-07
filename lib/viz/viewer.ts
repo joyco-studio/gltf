@@ -1,6 +1,7 @@
 import { Clock, Scene } from 'three/webgpu'
 
 import { ControlSystem } from './controls/control-system'
+import { AnimationSystem } from './systems/animation-system'
 import { EventEmitter } from './event-emitter'
 import { inspectGltf, type GltfDocumentInfo } from './inspect'
 import type { System } from './system'
@@ -45,6 +46,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly bounds: BoundsSystem
   readonly model: ModelSystem
   readonly highlight: HighlightSystem
+  readonly animations: AnimationSystem
 
   private systems: System[]
   private clock = new Clock()
@@ -63,8 +65,9 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.bounds = new BoundsSystem()
     this.model = new ModelSystem()
     this.highlight = new HighlightSystem()
+    this.animations = new AnimationSystem()
 
-    // update order: controls (navigation) → bounds (reads camera) → render last
+    // update order: controls (navigation) → animations (pose) → render last
     this.systems = [
       this.camera,
       this.controls,
@@ -73,6 +76,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.bounds,
       this.model,
       this.highlight,
+      this.animations,
       this.render,
     ]
     for (const system of this.systems) system.init?.(this)
@@ -113,11 +117,22 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.clock.stop()
   }
 
-  /** Frame a glTF mesh for close inspection (no-op if it has no geometry). */
-  inspectMesh(id: number, name: string) {
-    const box = this.model.getMeshWorldBox(id)
+  /**
+   * Frame a glTF entity for close inspection: a mesh directly, a material
+   * via every mesh using it, a texture via every mesh whose materials
+   * sample it. No-op when nothing renderable resolves.
+   */
+  inspectItem(kind: 'mesh' | 'material' | 'texture', id: number, name: string) {
+    const meshes =
+      kind === 'mesh'
+        ? this.model.getMeshObjects(id)
+        : kind === 'material'
+          ? this.model.getMeshesUsingMaterial(id)
+          : this.model.getMeshesUsingTexture(id)
+
+    const box = this.model.getWorldBoxOfMeshes(meshes)
     if (!box) return
-    this.controls.inspect({ kind: 'mesh', id, name }, box)
+    this.controls.inspect({ kind, id, name }, box)
   }
 
   async loadFiles(files: File[]) {

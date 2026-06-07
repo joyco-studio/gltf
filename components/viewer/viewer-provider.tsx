@@ -8,10 +8,10 @@ import {
   type ViewerSnapshot,
 } from '@/lib/viz/viewer'
 
-type InspectorTab = 'contents' | 'textures'
+type InspectorTab = 'contents' | 'textures' | 'animations'
 
 interface Selection {
-  kind: 'mesh' | 'material' | 'texture'
+  kind: 'mesh' | 'material' | 'texture' | 'animation'
   id: number
 }
 
@@ -24,6 +24,8 @@ interface ViewerContextValue {
   openUrl: (url: string) => void
   tab: InspectorTab
   setTab: (tab: InspectorTab) => void
+  sidebarOpen: boolean
+  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>
   selection: Selection | null
   select: (selection: Selection | null) => void
   searchOpen: boolean
@@ -46,6 +48,7 @@ const getEmptySnapshot = () => EMPTY_SNAPSHOT
 function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [viewer, setViewer] = React.useState<Viewer | null>(null)
   const [tab, setTab] = React.useState<InspectorTab>('contents')
+  const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
 
@@ -99,12 +102,24 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       openUrl,
       tab,
       setTab,
+      sidebarOpen,
+      setSidebarOpen,
       selection,
       select,
       searchOpen,
       setSearchOpen,
     }),
-    [viewer, snapshot, attach, openFiles, openUrl, tab, selection, searchOpen]
+    [
+      viewer,
+      snapshot,
+      attach,
+      openFiles,
+      openUrl,
+      tab,
+      sidebarOpen,
+      selection,
+      searchOpen,
+    ]
   )
 
   return (

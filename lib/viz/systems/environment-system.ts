@@ -82,6 +82,16 @@ class EnvironmentSystem implements System {
     })
   }
 
+  /**
+   * Scale the fog band to the framed model: the defaults suit the ±15
+   * world, but a large model frames the camera far beyond them and would
+   * be fogged into the background entirely.
+   */
+  fit(worldRadius: number) {
+    this.fog.near = Math.max(FOG_NEAR, worldRadius * 4.5)
+    this.fog.far = Math.max(FOG_FAR, worldRadius * 12)
+  }
+
   private syncFogToTheme() {
     const background = getComputedStyle(document.body).backgroundColor
     const color = cssColorToThree(background)

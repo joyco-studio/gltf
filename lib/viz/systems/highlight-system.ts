@@ -10,6 +10,7 @@ import {
   vec3,
 } from 'three/tsl'
 
+import type { InspectTarget } from '../controls/control-system'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
@@ -64,7 +65,7 @@ class HighlightSystem implements System {
     this.viewer = viewer
     // stay in sync with the inspect state — fully event-driven
     viewer.controls.on('change', ({ inspecting }) => {
-      this.apply(inspecting ? inspecting.id : null)
+      this.apply(inspecting)
     })
   }
 
@@ -89,15 +90,36 @@ class HighlightSystem implements System {
     return nodeMaterial
   }
 
-  private apply(meshId: number | null) {
+  private apply(target: InspectTarget | null) {
     this.restore()
-    if (meshId === null) return
+    if (target === null) return
 
-    for (const mesh of this.viewer.model.getMeshObjects(meshId)) {
+    const model = this.viewer.model
+    const meshes =
+      target.kind === 'mesh'
+        ? model.getMeshObjects(target.id)
+        : target.kind === 'material'
+          ? model.getMeshesUsingMaterial(target.id)
+          : model.getMeshesUsingTexture(target.id)
+
+    // for material/texture targets only the matching materials light up —
+    // other primitives of the same mesh stay untouched
+    const matches = (material: Material) =>
+      target.kind === 'mesh'
+        ? true
+        : target.kind === 'material'
+          ? model.getMaterialId(material) === target.id
+          : model.materialUsesTexture(material, target.id)
+
+    for (const mesh of meshes) {
       const original = mesh.material
       mesh.material = Array.isArray(original)
-        ? original.map((entry) => this.promote(entry))
-        : this.promote(original)
+        ? original.map((entry) =>
+            matches(entry) ? this.promote(entry) : entry
+          )
+        : matches(original)
+          ? this.promote(original)
+          : original
       this.swaps.push({ mesh, original })
     }
   }

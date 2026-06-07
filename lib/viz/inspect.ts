@@ -47,6 +47,17 @@ interface GltfTextureInfo {
   previewUrl: string | null
 }
 
+interface GltfAnimationInfo {
+  kind: 'animation'
+  id: number
+  name: string
+  channels: number
+  samplers: number
+  duration: number
+  keyframes: number
+  size: number
+}
+
 interface GltfSceneInfo {
   name: string
   nodeCount: number
@@ -60,6 +71,7 @@ interface GltfDocumentInfo {
   meshes: GltfMeshInfo[]
   materials: GltfMaterialInfo[]
   textures: GltfTextureInfo[]
+  animations: GltfAnimationInfo[]
 }
 
 /* ------------------------------- glTF JSON ------------------------------- */
@@ -100,7 +112,11 @@ interface GltfJson {
     }
   }[]
   scenes?: { name?: string }[]
-  animations?: unknown[]
+  animations?: {
+    name?: string
+    channels?: { sampler: number }[]
+    samplers?: { input: number; output: number }[]
+  }[]
 }
 
 const COMPONENT_TYPE_LABELS: Record<number, string> = {
@@ -408,6 +424,50 @@ async function buildTextureInfos(
   )
 }
 
+function buildAnimationInfos(json: GltfJson) {
+  const accessors = json.accessors ?? []
+
+  return (json.animations ?? []).map((animation, id): GltfAnimationInfo => {
+    const samplers = animation.samplers ?? []
+
+    // duration = latest keyframe time; the spec mandates min/max on inputs
+    let duration = 0
+    let keyframes = 0
+    let size = 0
+    const seenAccessors = new Set<number>()
+
+    const addAccessor = (index: number) => {
+      if (seenAccessors.has(index)) return
+      seenAccessors.add(index)
+      const accessor = accessors[index]
+      if (accessor) size += accessorByteLength(accessor)
+    }
+
+    for (const sampler of samplers) {
+      const input = accessors[sampler.input] as
+        | (GltfJsonAccessor & { max?: number[] })
+        | undefined
+      if (input) {
+        duration = Math.max(duration, input.max?.[0] ?? 0)
+        if (!seenAccessors.has(sampler.input)) keyframes += input.count
+      }
+      addAccessor(sampler.input)
+      addAccessor(sampler.output)
+    }
+
+    return {
+      kind: 'animation',
+      id,
+      name: animation.name ?? `animation_${id}`,
+      channels: animation.channels?.length ?? 0,
+      samplers: samplers.length,
+      duration,
+      keyframes,
+      size,
+    }
+  })
+}
+
 async function inspectGltf(
   gltf: GLTF,
   fileName: string
@@ -436,6 +496,7 @@ async function inspectGltf(
     meshes,
     materials,
     textures,
+    animations: buildAnimationInfos(json),
   }
 }
 
@@ -445,5 +506,6 @@ export type {
   GltfMeshInfo,
   GltfMaterialInfo,
   GltfTextureInfo,
+  GltfAnimationInfo,
   GltfSceneInfo,
 }

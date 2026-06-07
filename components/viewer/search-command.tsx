@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Image as ImageIcon, Palette } from "lucide-react";
+import { Box, Image as ImageIcon, Palette, Play } from "lucide-react";
 
 import {
   Command,
@@ -20,8 +20,15 @@ import { useViewer, type Selection } from "./viewer-provider";
  * a result jumps the contents browser to the matching tab and row.
  */
 function SearchCommand() {
-  const { viewer, snapshot, setTab, select, searchOpen, setSearchOpen } =
-    useViewer();
+  const {
+    viewer,
+    snapshot,
+    setTab,
+    setSidebarOpen,
+    select,
+    searchOpen,
+    setSearchOpen,
+  } = useViewer();
   const { document } = snapshot;
 
   React.useEffect(() => {
@@ -35,12 +42,23 @@ function SearchCommand() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setSearchOpen]);
 
-  const jumpTo = (selection: Selection, name?: string) => {
-    setTab(selection.kind === "texture" ? "textures" : "contents");
+  const jumpTo = (selection: Selection, name: string) => {
+    // show it in the sidebar (re-opening it if collapsed)...
+    setSidebarOpen(true);
+    setTab(
+      selection.kind === "texture"
+        ? "textures"
+        : selection.kind === "animation"
+          ? "animations"
+          : "contents",
+    );
     select(selection);
-    // meshes get framed for close inspection (ESC exits)
-    if (selection.kind === "mesh" && name !== undefined) {
-      viewer?.inspectMesh(selection.id, name);
+    // ...and trigger the scene effect: animations play (exclusive), every
+    // other kind gets framed + highlighted for inspection (ESC exits)
+    if (selection.kind === "animation") {
+      viewer?.animations.play(selection.id);
+    } else {
+      viewer?.inspectItem(selection.kind, selection.id, name);
     }
     setSearchOpen(false);
   };
@@ -84,7 +102,9 @@ function SearchCommand() {
                 <CommandItem
                   key={`material-${material.id}`}
                   value={`material ${material.name} ${material.id}`}
-                  onSelect={() => jumpTo({ kind: "material", id: material.id })}
+                  onSelect={() =>
+                    jumpTo({ kind: "material", id: material.id }, material.name)
+                  }
                 >
                   <Palette />
                   {material.name}
@@ -102,12 +122,37 @@ function SearchCommand() {
                 <CommandItem
                   key={`texture-${texture.id}`}
                   value={`texture ${texture.name} ${texture.id}`}
-                  onSelect={() => jumpTo({ kind: "texture", id: texture.id })}
+                  onSelect={() =>
+                    jumpTo({ kind: "texture", id: texture.id }, texture.name)
+                  }
                 >
                   <ImageIcon />
                   {texture.name}
                   <span className="ml-auto font-mono text-xs text-muted-foreground">
                     #{texture.id}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
+
+          {document && document.animations.length > 0 ? (
+            <CommandGroup heading="Animations">
+              {document.animations.map((animation) => (
+                <CommandItem
+                  key={`animation-${animation.id}`}
+                  value={`animation ${animation.name} ${animation.id}`}
+                  onSelect={() =>
+                    jumpTo(
+                      { kind: "animation", id: animation.id },
+                      animation.name,
+                    )
+                  }
+                >
+                  <Play />
+                  {animation.name}
+                  <span className="ml-auto font-mono text-xs text-muted-foreground">
+                    #{animation.id}
                   </span>
                 </CommandItem>
               ))}

@@ -15,7 +15,7 @@ import type {
 } from './types'
 
 interface InspectTarget {
-  kind: 'mesh'
+  kind: 'mesh' | 'material' | 'texture'
   id: number
   name: string
 }
@@ -152,6 +152,7 @@ class ControlSystem
     const maxSize = this.moveToBox(box)
     this.context.worldRadius = Math.max(maxSize / 2, 0.001)
     this.viewer.grid.fit(this.context.worldRadius)
+    this.viewer.environment.fit(this.context.worldRadius)
     this.active.syncWithCamera()
   }
 

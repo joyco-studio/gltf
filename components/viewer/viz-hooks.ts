@@ -6,6 +6,10 @@ import {
   DEFAULT_CONTROLS_SNAPSHOT,
   type ControlsSnapshot,
 } from '@/lib/viz/controls/control-system'
+import {
+  EMPTY_ANIMATIONS_SNAPSHOT,
+  type AnimationsSnapshot,
+} from '@/lib/viz/systems/animation-system'
 
 import { useViewer } from './viewer-provider'
 
@@ -48,4 +52,24 @@ function useGridVisible(): boolean {
   )
 }
 
-export { useControlsState, useGridVisible }
+const getEmptyAnimations = () => EMPTY_ANIMATIONS_SNAPSHOT
+
+/** React's view into the AnimationSystem playback state. */
+function useAnimationsState(): AnimationsSnapshot {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.animations.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.animations.getSnapshot() : getEmptyAnimations,
+    getEmptyAnimations
+  )
+}
+
+export { useAnimationsState, useControlsState, useGridVisible }

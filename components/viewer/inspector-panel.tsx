@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+import { AnimationsTable } from './animations-table'
 import { MaterialsTable } from './materials-table'
 import { MeshesTable } from './meshes-table'
 import { TexturesGrid } from './textures-grid'
@@ -51,8 +52,13 @@ const PANEL_EDGE_MARGIN = 32
  * handle for resizing (double-click resets).
  */
 function InspectorPanel() {
-  const { snapshot, tab, setTab } = useViewer()
-  const [open, setOpen] = React.useState(true)
+  const {
+    snapshot,
+    tab,
+    setTab,
+    sidebarOpen: open,
+    setSidebarOpen: setOpen,
+  } = useViewer()
   const [width, setWidth] = React.useState(DEFAULT_PANEL_WIDTH)
   const [resizing, setResizing] = React.useState(false)
   const { document } = snapshot
@@ -67,26 +73,49 @@ function InspectorPanel() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [setOpen])
+
+  const asideRef = React.useRef<HTMLElement>(null)
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    const aside = asideRef.current
+    if (!aside) return
+
     const handle = event.currentTarget
     const startX = event.clientX
-    const startWidth = width
+    const startWidth = aside.offsetWidth
     handle.setPointerCapture(event.pointerId)
     setResizing(true)
 
-    const handleMove = (move: PointerEvent) => {
-      const max = window.innerWidth - PANEL_EDGE_MARGIN
-      setWidth(
-        Math.min(Math.max(startWidth + move.clientX - startX, MIN_PANEL_WIDTH), max)
+    // Drag writes the width straight to the DOM (rAF-coalesced) — going
+    // through setState would re-render the whole table subtree on every
+    // pointermove, which is what made resizing laggy. React state gets a
+    // single commit on release.
+    let nextWidth = startWidth
+    let frame = 0
+
+    const clampWidth = (value: number) =>
+      Math.min(
+        Math.max(value, MIN_PANEL_WIDTH),
+        window.innerWidth - PANEL_EDGE_MARGIN
       )
+
+    const handleMove = (move: PointerEvent) => {
+      nextWidth = clampWidth(startWidth + move.clientX - startX)
+      if (frame) return // at most one layout per frame
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        aside.style.width = `${nextWidth}px`
+      })
     }
     const handleUp = (up: PointerEvent) => {
       handle.releasePointerCapture(up.pointerId)
       handle.removeEventListener('pointermove', handleMove)
       handle.removeEventListener('pointerup', handleUp)
+      if (frame) cancelAnimationFrame(frame)
+      aside.style.width = `${nextWidth}px`
+      setWidth(nextWidth) // single commit
       setResizing(false)
     }
     handle.addEventListener('pointermove', handleMove)
@@ -116,6 +145,7 @@ function InspectorPanel() {
 
   return (
     <aside
+      ref={asideRef}
       className="pointer-events-auto absolute top-0 bottom-4 left-4 z-40 flex max-w-[calc(100%-2rem)] flex-col border bg-background/85 backdrop-blur-md"
       style={{ width }}
     >
@@ -136,6 +166,14 @@ function InspectorPanel() {
                 {document.textures.length}
               </Badge>
             </TabsTrigger>
+            {document.animations.length > 0 ? (
+              <TabsTrigger value="animations" className="h-8">
+                Animations
+                <Badge variant="muted" size="sm">
+                  {document.animations.length}
+                </Badge>
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           <Tooltip>
@@ -170,6 +208,12 @@ function InspectorPanel() {
         <TabsContent value="textures" className="min-h-0">
           <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <TexturesGrid textures={document.textures} />
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="animations" className="min-h-0">
+          <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
+            <AnimationsTable animations={document.animations} />
           </ScrollArea>
         </TabsContent>
       </Tabs>
