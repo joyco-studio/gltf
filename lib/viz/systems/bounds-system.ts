@@ -125,6 +125,7 @@ class BoundsSystem implements System {
 
   private mesh!: Mesh
   private material!: MeshBasicNodeMaterial
+  private unsubscribe: (() => void) | null = null
 
   init(viewer: Viewer) {
     this.material = createWallMaterial()
@@ -140,9 +141,18 @@ class BoundsSystem implements System {
     this.mesh.renderOrder = 2
     this.mesh.frustumCulled = false
     viewer.scene.add(this.mesh)
+
+    // The walls only constrain (and so only matter visually in) fly mode —
+    // orbit never reaches them. Track the active mode and show them to match.
+    const sync = (mode: string) => {
+      this.mesh.visible = mode === 'fly'
+    }
+    sync(viewer.controls.getSnapshot().mode)
+    this.unsubscribe = viewer.controls.on('change', ({ mode }) => sync(mode))
   }
 
   dispose() {
+    this.unsubscribe?.()
     this.mesh.geometry.dispose()
     this.material.dispose()
   }
