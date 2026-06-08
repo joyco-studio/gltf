@@ -5,9 +5,11 @@ import * as React from 'react'
 import {
   EMPTY_SNAPSHOT,
   Viewer,
+  type ModelTransform,
   type ViewerSnapshot,
 } from '@/lib/viz/viewer'
 
+import { EXAMPLE_MODEL } from './example-model'
 import { formatSharePath } from './share-path'
 
 type InspectorTab = 'contents' | 'textures' | 'animations'
@@ -23,7 +25,11 @@ interface ViewerContextValue {
   /** Mount a canvas into the viz. Returns a cleanup to dispose the instance. */
   attach: (canvas: HTMLCanvasElement) => () => void
   openFiles: (files: File[]) => void
-  openUrl: (url: string) => void
+  openUrl: (url: string, transform?: ModelTransform) => void
+  /** Load the bundled showcase model. */
+  openExample: () => void
+  /** True while the active model is the bundled example (for attribution). */
+  isExample: boolean
   /** Reveal + inspect an entity (same effect as picking it in ⌘K search). */
   jumpTo: (selection: Selection, name: string) => void
   tab: InspectorTab
@@ -55,6 +61,9 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
+  // source URL of the active model, or null when loaded from local files —
+  // lets the UI credit the bundled example while it's on screen
+  const [source, setSource] = React.useState<string | null>(null)
 
   const attach = React.useCallback((canvas: HTMLCanvasElement) => {
     const instance = new Viewer(canvas)
@@ -84,17 +93,28 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const openFiles = React.useCallback(
     (files: File[]) => {
       select(null)
+      setSource(null)
       void viewer?.loadFiles(files)
     },
     [viewer]
   )
 
   const openUrl = React.useCallback(
-    (url: string) => {
+    (url: string, transform?: ModelTransform) => {
       select(null)
-      void viewer?.loadUrl(url)
+      setSource(url)
+      void viewer?.loadUrl(url, transform)
     },
     [viewer]
+  )
+
+  const openExample = React.useCallback(
+    () =>
+      openUrl(EXAMPLE_MODEL.url, {
+        position: EXAMPLE_MODEL.position,
+        scale: EXAMPLE_MODEL.scale,
+      }),
+    [openUrl]
   )
 
   const jumpTo = React.useCallback(
@@ -131,6 +151,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
+      openExample,
+      isExample: source === EXAMPLE_MODEL.url,
       jumpTo,
       tab,
       setTab,
@@ -147,6 +169,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
+      openExample,
+      source,
       jumpTo,
       tab,
       sidebarOpen,

@@ -10,7 +10,11 @@ import { CameraSystem } from './systems/camera-system'
 import { EnvironmentSystem } from './systems/environment-system'
 import { GridSystem } from './systems/grid-system'
 import { HighlightSystem } from './systems/highlight-system'
-import { ModelSystem, type LoadedModel } from './systems/model-system'
+import {
+  ModelSystem,
+  type LoadedModel,
+  type ModelTransform,
+} from './systems/model-system'
 import { RenderSystem } from './systems/render-system'
 
 type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
@@ -139,8 +143,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
     await this.load(() => this.model.loadFiles(files))
   }
 
-  async loadUrl(url: string) {
-    await this.load(() => this.model.loadUrl(url))
+  async loadUrl(url: string, transform?: ModelTransform) {
+    await this.load(() => this.model.loadUrl(url, transform))
   }
 
   private async load(loadModel: () => Promise<LoadedModel | null>) {
@@ -171,4 +175,4 @@ class Viewer extends EventEmitter<ViewerEvents> {
 }
 
 export { Viewer, EMPTY_SNAPSHOT }
-export type { ViewerSnapshot, ViewerStatus }
+export type { ViewerSnapshot, ViewerStatus, ModelTransform }

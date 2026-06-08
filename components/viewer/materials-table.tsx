@@ -75,6 +75,10 @@ function MaterialsTable({ materials }: { materials: GltfMaterialInfo[] }) {
         selection?.kind === 'material' ? `material-${selection.id}` : null
       }
       onRowClick={(material) => select({ kind: 'material', id: material.id })}
+      inspectRow={(material) => ({
+        selection: { kind: 'material', id: material.id },
+        name: material.name,
+      })}
     />
   )
 }

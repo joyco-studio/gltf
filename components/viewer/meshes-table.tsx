@@ -46,9 +46,7 @@ const columns: ColumnDef<GltfMeshInfo>[] = [
     header: 'Attributes',
     className: 'max-w-72 whitespace-normal',
     cell: (mesh) =>
-      mesh.attributes
-        .map(({ name, type }) => `${name}:${type}`)
-        .join(', '),
+      mesh.attributes.map(({ name, type }) => `${name}:${type}`).join(', '),
   },
   {
     key: 'instances',
@@ -91,15 +89,17 @@ function MeshesTable({ meshes }: { meshes: GltfMeshInfo[] }) {
       data={meshes}
       columns={columns}
       rowId={(mesh) => `mesh-${mesh.id}`}
-      selectedId={
-        selection?.kind === 'mesh' ? `mesh-${selection.id}` : null
-      }
+      selectedId={selection?.kind === 'mesh' ? `mesh-${selection.id}` : null}
       onRowClick={(mesh) => {
         // Clicking a mesh's material chip area still selects the mesh row;
         // jumping to the material happens through search or the material table.
         setTab('contents')
         select({ kind: 'mesh', id: mesh.id })
       }}
+      inspectRow={(mesh) => ({
+        selection: { kind: 'mesh', id: mesh.id },
+        name: mesh.name,
+      })}
     />
   )
 }

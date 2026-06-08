@@ -20,7 +20,7 @@ const GRID_SIZE = 100
 const GRID_DIVISIONS = 100
 // wide enough to survive AA coverage at the idle viewing distance — quad
 // lines thin with perspective, unlike the constant-1px raster of GridHelper
-const GRID_LINE_WIDTH = 0.005
+const GRID_LINE_WIDTH = 0.01
 // crosses sit at every other grid intersection, skipping the origin
 const CROSS_COUNT = 23
 const CROSS_LINE_WIDTH = 0.026

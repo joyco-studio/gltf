@@ -46,6 +46,9 @@ const DEFAULT_SNAPSHOT: ControlsSnapshot = {
 
 const ALIGNMENT_THRESHOLD = 0.9995
 
+/** How far past the framing distance the camera may dolly out. */
+const MAX_ZOOM_OUT_FACTOR = 2.5
+
 /**
  * Pluggable camera navigation. Owns the shared focus target, the mode
  * registry and the axis-lock state; every mode implements the same
@@ -219,6 +222,10 @@ class ControlSystem
     const maxSize = Math.max(size.x, size.y, size.z, 0.001)
 
     const distance = this.viewer.camera.fitDistance(maxSize) * fitFactor
+
+    // Cap dolly-out relative to this framing so the model can't shrink away.
+    for (const mode of this.modes.values())
+      mode.setMaxDistance?.(distance * MAX_ZOOM_OUT_FACTOR)
 
     this.viewer.camera.setFrame(distance)
     camera.position

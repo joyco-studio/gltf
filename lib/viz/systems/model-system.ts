@@ -27,6 +27,17 @@ interface LoadedModel {
   fileName: string
 }
 
+/**
+ * Optional placement for a loaded model. `scale` resizes the asset (handy for
+ * models authored at extreme scales); `position` is a world-space offset that
+ * is independent of `scale` — a node's translation lives in parent space, so
+ * scaling the root never multiplies its own offset.
+ */
+interface ModelTransform {
+  position?: readonly [number, number, number]
+  scale?: number
+}
+
 function disposeMaterial(material: Material) {
   for (const value of Object.values(material)) {
     if (value instanceof Texture) value.dispose()
@@ -107,7 +118,7 @@ class ModelSystem implements System {
     }
   }
 
-  async loadUrl(url: string) {
+  async loadUrl(url: string, transform?: ModelTransform) {
     const loadId = ++this.loadId
     const loader = await this.createLoader()
     const gltf = await loader.loadAsync(url)
@@ -115,7 +126,7 @@ class ModelSystem implements System {
       disposeObject(gltf.scene)
       return null
     }
-    return this.swap(gltf, url.split('/').pop() ?? url)
+    return this.swap(gltf, url.split('/').pop() ?? url, transform)
   }
 
   private get associations() {
@@ -191,12 +202,17 @@ class ModelSystem implements System {
     return box.isEmpty() ? null : box
   }
 
-  private swap(gltf: GLTF, fileName: string) {
+  private swap(gltf: GLTF, fileName: string, transform?: ModelTransform) {
     if (this.current) {
       this.container.remove(this.current.root)
       disposeObject(this.current.root)
     }
 
+    // Resize then offset, applied before framing so the camera fits the model
+    // where it ends up. position is parent-space, so it stays in world units
+    // regardless of scale (T·R·S — scale never touches the node's own offset).
+    if (transform?.scale !== undefined) gltf.scene.scale.setScalar(transform.scale)
+    if (transform?.position) gltf.scene.position.fromArray(transform.position)
     this.container.add(gltf.scene)
     this.current = { gltf, root: gltf.scene, fileName }
     this.viewer.controls.frame(gltf.scene)
@@ -215,4 +231,4 @@ class ModelSystem implements System {
 }
 
 export { ModelSystem }
-export type { LoadedModel }
+export type { LoadedModel, ModelTransform }

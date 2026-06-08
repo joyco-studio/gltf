@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
+import { InspectContextMenu } from './inspect-context-menu'
+import type { Selection } from './viewer-provider'
+
 interface ColumnDef<Row> {
   key: string
   header: string
@@ -44,12 +47,15 @@ function DataTable<Row>({
   rowId,
   selectedId,
   onRowClick,
+  inspectRow,
 }: {
   data: Row[]
   columns: ColumnDef<Row>[]
   rowId: (row: Row) => string
   selectedId?: string | null
   onRowClick?: (row: Row) => void
+  /** Adds a right-click "Inspect" action to each row (same effect as ⌘K). */
+  inspectRow?: (row: Row) => { selection: Selection; name: string }
 }) {
   const [sort, setSort] = React.useState<SortState | null>(null)
   const selectedRowRef = React.useRef<HTMLTableRowElement>(null)
@@ -123,9 +129,8 @@ function DataTable<Row>({
         {sorted.map((row) => {
           const id = rowId(row)
           const selected = id === selectedId
-          return (
+          const tableRow = (
             <TableRow
-              key={id}
               ref={selected ? selectedRowRef : undefined}
               data-state={selected ? 'selected' : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -147,6 +152,14 @@ function DataTable<Row>({
                 </TableCell>
               ))}
             </TableRow>
+          )
+
+          return inspectRow ? (
+            <InspectContextMenu key={id} {...inspectRow(row)}>
+              {tableRow}
+            </InspectContextMenu>
+          ) : (
+            <React.Fragment key={id}>{tableRow}</React.Fragment>
           )
         })}
       </TableBody>

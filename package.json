@@ -12,6 +12,7 @@
     "@diceui/mention": "^0.8.0",
     "@radix-ui/react-avatar": "^1.1.12",
     "@radix-ui/react-collapsible": "^1.1.13",
+    "@radix-ui/react-context-menu": "^2.3.0",
     "@radix-ui/react-direction": "^1.1.2",
     "@radix-ui/react-dropdown-menu": "^2.1.17",
     "@radix-ui/react-popover": "^1.1.16",

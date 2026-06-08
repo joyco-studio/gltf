@@ -27,6 +27,10 @@ class OrbitMode implements CameraControlMode {
     this.controls.autoRotate = idle
   }
 
+  setMaxDistance(distance: number) {
+    this.controls.maxDistance = distance
+  }
+
   enable() {
     this.controls.enabled = true
     this.controls.update()

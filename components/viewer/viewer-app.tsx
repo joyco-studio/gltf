@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 import { ControlsToolbar } from "./controls-toolbar";
+import { EXAMPLE_MODEL } from "./example-model";
 import { FileDropZone, parseHttpUrl, useFilePicker } from "./file-drop-zone";
 import { resolveSharePath } from "./share-path";
 import { InspectBanner } from "./inspect-banner";
@@ -18,7 +19,7 @@ import { ViewerHeader } from "./viewer-header";
 import { ViewerProvider, useViewer } from "./viewer-provider";
 
 function EmptyState() {
-  const { snapshot } = useViewer();
+  const { snapshot, openExample } = useViewer();
   const { input, openPicker } = useFilePicker();
 
   if (snapshot.status === "loading") {
@@ -58,6 +59,16 @@ function EmptyState() {
           <FileUp />
           Open file
         </Button>
+        <p className="font-mono text-xs text-muted-foreground">
+          or{" "}
+          <button
+            type="button"
+            onClick={openExample}
+            className="underline underline-offset-2 transition-colors hover:text-foreground"
+          >
+            try example
+          </button>
+        </p>
         {input}
       </div>
     </div>
@@ -81,7 +92,12 @@ function UrlParamLoader() {
   React.useEffect(() => {
     if (!viewer || !url || loadedRef.current === url) return;
     loadedRef.current = url;
-    openUrl(url);
+    // honour the example's placement when shared via ?url=
+    const transform =
+      url === EXAMPLE_MODEL.url
+        ? { position: EXAMPLE_MODEL.position, scale: EXAMPLE_MODEL.scale }
+        : undefined;
+    openUrl(url, transform);
   }, [viewer, url, openUrl]);
 
   React.useEffect(() => {
@@ -94,6 +110,30 @@ function UrlParamLoader() {
   }, [snapshot, path, jumpTo]);
 
   return null;
+}
+
+/** Credits the bundled showcase model while it's the one on screen. */
+function ModelCredit() {
+  const { snapshot, isExample } = useViewer();
+
+  if (!isExample || snapshot.status !== "ready") return null;
+
+  return (
+    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 border bg-background/85 px-3 py-1.5 backdrop-blur-xs">
+      <p className="font-mono text-xs text-muted-foreground">
+        Model:{" "}
+        <a
+          href={EXAMPLE_MODEL.credit}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="underline underline-offset-2 transition-colors hover:text-foreground"
+        >
+          {EXAMPLE_MODEL.name}
+        </a>{" "}
+        by {EXAMPLE_MODEL.artist}
+      </p>
+    </div>
+  );
 }
 
 /** Surfaces load errors that happen while a previous model stays on screen. */
@@ -123,6 +163,7 @@ function ViewerApp() {
             <InspectorPanel />
             <ControlsToolbar />
             <InspectBanner />
+            <ModelCredit />
             <ErrorBanner />
           </div>
         </div>

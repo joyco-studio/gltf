@@ -46,6 +46,11 @@ interface CameraControlMode {
    * adapt — e.g. orbit slowly auto-rotates around the focus point.
    */
   setIdle?(idle: boolean): void
+  /**
+   * Cap how far the camera may dolly away from the focus. Set per reframe so
+   * the limit tracks the loaded model's scale instead of a fixed world size.
+   */
+  setMaxDistance?(distance: number): void
   dispose(): void
 }
 
