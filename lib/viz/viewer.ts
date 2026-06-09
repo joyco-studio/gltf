@@ -2,6 +2,7 @@ import { Clock, Scene } from 'three/webgpu'
 
 import { ControlSystem } from './controls/control-system'
 import { AnimationSystem } from './systems/animation-system'
+import { AxesSystem } from './systems/axes-system'
 import { EventEmitter } from './event-emitter'
 import { inspectGltf, type GltfDocumentInfo } from './inspect'
 import type { System } from './system'
@@ -50,6 +51,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly bounds: BoundsSystem
   readonly model: ModelSystem
   readonly highlight: HighlightSystem
+  readonly axes: AxesSystem
   readonly animations: AnimationSystem
 
   private systems: System[]
@@ -69,6 +71,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.bounds = new BoundsSystem()
     this.model = new ModelSystem()
     this.highlight = new HighlightSystem()
+    this.axes = new AxesSystem()
     this.animations = new AnimationSystem()
 
     // update order: controls (navigation) → animations (pose) → render last
@@ -80,6 +83,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.bounds,
       this.model,
       this.highlight,
+      this.axes,
       this.animations,
       this.render,
     ]
@@ -127,12 +131,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
    * sample it. No-op when nothing renderable resolves.
    */
   inspectItem(kind: 'mesh' | 'material' | 'texture', id: number, name: string) {
-    const meshes =
-      kind === 'mesh'
-        ? this.model.getMeshObjects(id)
-        : kind === 'material'
-          ? this.model.getMeshesUsingMaterial(id)
-          : this.model.getMeshesUsingTexture(id)
+    const meshes = this.model.getMeshesForTarget({ kind, id, name })
 
     const box = this.model.getWorldBoxOfMeshes(meshes)
     if (!box) return

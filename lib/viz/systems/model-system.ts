@@ -3,6 +3,7 @@ import {
   Group,
   Material,
   Mesh,
+  Quaternion,
   REVISION,
   Texture,
   type LoadingManager,
@@ -13,6 +14,7 @@ import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 
+import type { InspectTarget } from '../controls/control-system'
 import { createGltfFileSet } from '../file-set'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -192,6 +194,20 @@ class ModelSystem implements System {
     )
   }
 
+  /** Every renderable in the current model. */
+  getAllMeshes(): Mesh[] {
+    return this.collectMeshes(() => true)
+  }
+
+  /** Renderables an inspect target resolves to (mesh / material / texture). */
+  getMeshesForTarget(target: InspectTarget): Mesh[] {
+    return target.kind === 'mesh'
+      ? this.getMeshObjects(target.id)
+      : target.kind === 'material'
+        ? this.getMeshesUsingMaterial(target.id)
+        : this.getMeshesUsingTexture(target.id)
+  }
+
   /** Combined world-space bounding box of a set of renderables. */
   getWorldBoxOfMeshes(meshes: Mesh[]): Box3 | null {
     if (meshes.length === 0) return null
@@ -200,6 +216,18 @@ class ModelSystem implements System {
     const box = new Box3()
     for (const mesh of meshes) box.expandByObject(mesh)
     return box.isEmpty() ? null : box
+  }
+
+  /**
+   * Representative world orientation of a set of renderables — the first
+   * mesh's. For a single glTF mesh every primitive shares the node, so this
+   * is exact; for a material/texture span it's a reasonable stand-in.
+   */
+  getWorldOrientationOfMeshes(meshes: Mesh[]): Quaternion | null {
+    const mesh = meshes[0]
+    if (!mesh) return null
+    this.current?.root.updateWorldMatrix(true, true)
+    return mesh.getWorldQuaternion(new Quaternion())
   }
 
   private swap(gltf: GLTF, fileName: string, transform?: ModelTransform) {

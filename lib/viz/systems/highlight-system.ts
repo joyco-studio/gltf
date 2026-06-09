@@ -1,6 +1,13 @@
-import type { Material, Mesh, Node, NodeMaterial } from 'three/webgpu'
+import {
+  MeshBasicNodeMaterial,
+  type Material,
+  type Mesh,
+  type Node,
+  type NodeMaterial,
+} from 'three/webgpu'
 import {
   abs,
+  color,
   float,
   fract,
   materialEmissive,
@@ -21,6 +28,10 @@ const STRIPE_WIDTH_PX = 1
 const TINT_STRENGTH = 0.05
 /** Extra glow on the diagonal lines. */
 const LINE_STRENGTH = 0.18
+
+/** Faint wash over everything else, so it reads as context, not occlusion. */
+const GHOST_COLOR = '#8a8a8a'
+const GHOST_OPACITY = 0.05
 
 /**
  * Subtle white tint + fixed-pixel 45° screen-space stripes, expressed as an
@@ -48,25 +59,49 @@ interface MaterialSwap {
 }
 
 /**
- * Marks the item under inspection by augmenting the emissive channel of the
- * meshes' OWN materials: each classic material is promoted to its node
- * pendant (the same conversion the renderer applies internally) with an
- * extra emissive node — no duplicate geometry, no z-fighting. Originals are
- * restored untouched on exit.
+ * Owns the visual state of inspection across the WHOLE model in one coherent
+ * pass: the inspected meshes get a striped emissive highlight (their own
+ * materials promoted to node pendants, no duplicate geometry); every other
+ * mesh is ghosted (a single faint, depth-write-off material) so nothing
+ * occludes the focus while the rest lingers as context.
+ *
+ * One system, one restore→apply, one captured-originals map. Splitting
+ * highlight and ghosting into two listeners would let each capture the
+ * other's swapped material as the "original" — across consecutive inspects
+ * (a mesh ghosted now, focused next) that corrupts restore and churns
+ * disposed materials through the renderer. Keeping it unified avoids that.
  */
 class HighlightSystem implements System {
   private viewer!: Viewer
   private highlightNode = createHighlightNode()
+  private ghost!: MeshBasicNodeMaterial
   private swaps: MaterialSwap[] = []
   /** Cache per source material so shared materials convert once per inspect. */
   private converted = new Map<Material, NodeMaterial>()
+  /** Target currently applied, so redundant publishes don't re-swap. */
+  private appliedKey: string | null = null
 
   init(viewer: Viewer) {
     this.viewer = viewer
-    // stay in sync with the inspect state — fully event-driven
-    viewer.controls.on('change', ({ inspecting }) => {
-      this.apply(inspecting)
+
+    // depthWrite off so ghosts never occlude; one instance covers all of them
+    this.ghost = new MeshBasicNodeMaterial({
+      transparent: true,
+      depthWrite: false,
     })
+    this.ghost.colorNode = color(GHOST_COLOR)
+    this.ghost.opacityNode = float(GHOST_OPACITY)
+
+    // stay in sync with the inspect state — fully event-driven
+    viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+  }
+
+  /** Only touch materials when the inspected target actually changes. */
+  private sync(target: InspectTarget | null) {
+    const key = target ? `${target.kind}:${target.id}` : null
+    if (key === this.appliedKey) return
+    this.appliedKey = key
+    this.apply(target)
   }
 
   private promote(material: Material): Material {
@@ -95,12 +130,7 @@ class HighlightSystem implements System {
     if (target === null) return
 
     const model = this.viewer.model
-    const meshes =
-      target.kind === 'mesh'
-        ? model.getMeshObjects(target.id)
-        : target.kind === 'material'
-          ? model.getMeshesUsingMaterial(target.id)
-          : model.getMeshesUsingTexture(target.id)
+    const focused = new Set(model.getMeshesForTarget(target))
 
     // for material/texture targets only the matching materials light up —
     // other primitives of the same mesh stay untouched
@@ -111,23 +141,27 @@ class HighlightSystem implements System {
           ? model.getMaterialId(material) === target.id
           : model.materialUsesTexture(material, target.id)
 
-    for (const mesh of meshes) {
+    // single pass over the whole model: every mesh starts from its true
+    // original (restore ran first), so each captured `original` is genuine
+    for (const mesh of model.getAllMeshes()) {
       const original = mesh.material
-      mesh.material = Array.isArray(original)
-        ? original.map((entry) =>
-            matches(entry) ? this.promote(entry) : entry
-          )
-        : matches(original)
-          ? this.promote(original)
-          : original
+      if (focused.has(mesh)) {
+        mesh.material = Array.isArray(original)
+          ? original.map((entry) =>
+              matches(entry) ? this.promote(entry) : entry
+            )
+          : matches(original)
+            ? this.promote(original)
+            : original
+      } else {
+        mesh.material = this.ghost
+      }
       this.swaps.push({ mesh, original })
     }
   }
 
   private restore() {
-    for (const { mesh, original } of this.swaps) {
-      mesh.material = original
-    }
+    for (const { mesh, original } of this.swaps) mesh.material = original
     this.swaps = []
     for (const material of this.converted.values()) material.dispose()
     this.converted.clear()
@@ -135,6 +169,7 @@ class HighlightSystem implements System {
 
   dispose() {
     this.restore()
+    this.ghost.dispose()
   }
 }
 

@@ -52,9 +52,16 @@ class CameraSystem
     return Math.tan(MathUtils.degToRad(this.perspective.fov / 2))
   }
 
-  /** Camera distance that fits `size` vertically in the perspective view. */
-  fitDistance(size: number) {
-    return size / (2 * this.halfFovTan)
+  /**
+   * Camera distance that fits a bounding sphere of `radius` — angle- and
+   * aspect-independent, so an orbiting camera never clips it. Honors the
+   * tighter of the vertical/horizontal FOV (the limit in portrait viewports).
+   */
+  fitSphereDistance(radius: number) {
+    const tanVertical = this.halfFovTan
+    const tanHorizontal = tanVertical * this.aspect
+    const halfAngle = Math.atan(Math.min(tanVertical, tanHorizontal))
+    return radius / Math.sin(halfAngle)
   }
 
   setProjection(mode: ProjectionMode, target: Vector3) {
