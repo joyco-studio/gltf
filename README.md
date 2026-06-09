@@ -1,5 +1,3 @@
-# gltf
-
 ![gltf](https://r2.joyco.studio/github-static/gltf-repo-banner.png)
 
 A browser-based glTF visualizer and inspector. Drag in a `.glb`/`.gltf` (with
@@ -19,28 +17,12 @@ Everything runs client-side; no files are uploaded.
 - **Contents browser** — sortable tables for meshes, materials, and animations,
   plus a texture grid. Click any row to inspect and highlight it in the scene.
 - **⌘K search** — fuzzy search across every element in the document.
-- **Shareable selections** — the inspected element is encoded in the URL
-  (`?path=materials.mat_1`) so links open straight to it.
+- **Shareable selections** — both the loaded model and the inspected element are
+  encoded in the URL search params (`?url=` + `?path=`), so a link opens the same
+  model framed on the same element, e.g.
+  `gltf.joyco.studio/?url=https://example.com/model.glb&path=materials.mat_1`.
 - **Local & private** — files are resolved in the browser; nothing leaves the
   machine.
-
-## Architecture
-
-The 3D layer is plain three.js (no react-three-fiber), built as a set of
-composable systems:
-
-- `lib/viz/viewer.ts` — the `Viewer` orchestrator. Owns the scene, the system
-  registry, the frame loop, and the resize observer.
-- `lib/viz/systems/*` — individual `System` classes (render, camera,
-  environment, grid, bounds, model, highlight, axes, animation).
-- `lib/viz/controls/*` — orbit and fly control modes.
-- `lib/viz/inspect.ts` — normalizes a loaded glTF document into the immutable
-  snapshots the UI reads.
-
-React is strictly a UI layer. Components subscribe to the `Viewer` through an
-event emitter and read immutable snapshots via `useSyncExternalStore`
-(`components/viewer/viewer-provider.tsx`) — they never touch three.js objects
-directly. UI is built on shadcn primitives in `components/ui/*`.
 
 ## Getting Started
 

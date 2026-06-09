@@ -26,6 +26,8 @@ interface ViewerContextValue {
   attach: (canvas: HTMLCanvasElement) => () => void
   openFiles: (files: File[]) => void
   openUrl: (url: string, transform?: ModelTransform) => void
+  /** Source URL of the active model, or null when loaded from local files. */
+  source: string | null
   /** Load the bundled showcase model. */
   openExample: () => void
   /** True while the active model is the bundled example (for attribution). */
@@ -94,6 +96,16 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     (files: File[]) => {
       select(null)
       setSource(null)
+      // local files can't be shared — drop any stale ?url / ?path
+      const params = new URLSearchParams(window.location.search)
+      params.delete('url')
+      params.delete('path')
+      const query = params.toString()
+      window.history.replaceState(
+        null,
+        '',
+        query ? `?${query}` : window.location.pathname
+      )
       void viewer?.loadFiles(files)
     },
     [viewer]
@@ -103,6 +115,13 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     (url: string, transform?: ModelTransform) => {
       select(null)
       setSource(url)
+      // reflect the source in the URL (?url=…) so the model is shareable.
+      // keep any ?path: on a shared ?url=…&path=… link the selection is
+      // restored once the document loads (UrlParamLoader). Next instruments
+      // replaceState, so deleting ?path here would race the jump and wipe it.
+      const params = new URLSearchParams(window.location.search)
+      params.set('url', url)
+      window.history.replaceState(null, '', `?${params}`)
       void viewer?.loadUrl(url, transform)
     },
     [viewer]
@@ -151,6 +170,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
+      source,
       openExample,
       isExample: source === EXAMPLE_MODEL.url,
       jumpTo,

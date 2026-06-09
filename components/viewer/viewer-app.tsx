@@ -80,25 +80,25 @@ function EmptyState() {
  * jumps to `?path=` (e.g. `materials.mat_1`) once the document is parsed.
  */
 function UrlParamLoader() {
-  const { viewer, snapshot, openUrl, jumpTo } = useViewer();
+  const { viewer, snapshot, openUrl, jumpTo, source } = useViewer();
   const searchParams = useSearchParams();
   const url = parseHttpUrl(searchParams.get("url") ?? "");
   const path = searchParams.get("path");
-  const loadedRef = React.useRef<string | null>(null);
   // guarded by document identity (one jump per loaded model), NOT by path:
   // in-app selections rewrite ?path and must not re-trigger the jump
   const jumpedDocRef = React.useRef<typeof snapshot.document>(null);
 
   React.useEffect(() => {
-    if (!viewer || !url || loadedRef.current === url) return;
-    loadedRef.current = url;
+    // guard on the active source, not a local ref: openUrl writes ?url= back,
+    // which re-runs this effect — comparing to `source` stops the reload loop
+    if (!viewer || !url || source === url) return;
     // honour the example's placement when shared via ?url=
     const transform =
       url === EXAMPLE_MODEL.url
         ? { position: EXAMPLE_MODEL.position, scale: EXAMPLE_MODEL.scale }
         : undefined;
     openUrl(url, transform);
-  }, [viewer, url, openUrl]);
+  }, [viewer, url, source, openUrl]);
 
   React.useEffect(() => {
     const { document } = snapshot;
