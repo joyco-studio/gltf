@@ -76,38 +76,49 @@ function EmptyState() {
 }
 
 /**
- * Auto-loads a model from `?url=` once the viewer instance is attached, then
- * jumps to `?path=` (e.g. `materials.mat_1`) once the document is parsed.
+ * Consumes the initial deep link: loads `?url=` once the viewer is attached,
+ * then jumps to `?path=` (e.g. `materials.mat_1`) once that document is parsed.
+ *
+ * The URL is read *once* (at first load) and is purely an output afterwards —
+ * openUrl/openFiles/jumpTo rewrite it, but those rewrites must never feed back
+ * here as a reload. So the load effect is a one-shot guarded by `startedRef`,
+ * not a reaction to live searchParams.
  */
 function UrlParamLoader() {
-  const { viewer, snapshot, openUrl, jumpTo, source } = useViewer();
+  const { viewer, snapshot, openUrl, jumpTo } = useViewer();
   const searchParams = useSearchParams();
-  const url = parseHttpUrl(searchParams.get("url") ?? "");
-  const path = searchParams.get("path");
-  // guarded by document identity (one jump per loaded model), NOT by path:
-  // in-app selections rewrite ?path and must not re-trigger the jump
+  const startedRef = React.useRef(false);
+  // captured at first load, before openUrl clears ?path; applied to the first
+  // parsed document only (a later paste must not re-jump to the deep-link path)
+  const initialPathRef = React.useRef<string | null>(null);
   const jumpedDocRef = React.useRef<typeof snapshot.document>(null);
 
   React.useEffect(() => {
-    // guard on the active source, not a local ref: openUrl writes ?url= back,
-    // which re-runs this effect — comparing to `source` stops the reload loop
-    if (!viewer || !url || source === url) return;
+    if (!viewer || startedRef.current) return;
+    // consume the one-shot the moment the viewer is ready, even with no ?url —
+    // otherwise the first paste's ?url= write would re-enter here and double-load
+    startedRef.current = true;
+    const url = parseHttpUrl(searchParams.get("url") ?? "");
+    if (!url) return;
+    initialPathRef.current = searchParams.get("path");
     // honour the example's placement when shared via ?url=
     const transform =
       url === EXAMPLE_MODEL.url
         ? { position: EXAMPLE_MODEL.position, scale: EXAMPLE_MODEL.scale }
         : undefined;
     openUrl(url, transform);
-  }, [viewer, url, source, openUrl]);
+  }, [viewer, searchParams, openUrl]);
 
   React.useEffect(() => {
     const { document } = snapshot;
     if (!document || jumpedDocRef.current === document) return;
     jumpedDocRef.current = document;
+    const path = initialPathRef.current;
+    initialPathRef.current = null; // deep-link path applies to the first model
     if (!path) return;
     const resolved = resolveSharePath(document, path);
     if (resolved) jumpTo(resolved.selection, resolved.name);
-  }, [snapshot, path, jumpTo]);
+  }, [snapshot, jumpTo]);
 
   return null;
 }

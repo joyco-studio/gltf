@@ -26,8 +26,6 @@ interface ViewerContextValue {
   attach: (canvas: HTMLCanvasElement) => () => void
   openFiles: (files: File[]) => void
   openUrl: (url: string, transform?: ModelTransform) => void
-  /** Source URL of the active model, or null when loaded from local files. */
-  source: string | null
   /** Load the bundled showcase model. */
   openExample: () => void
   /** True while the active model is the bundled example (for attribution). */
@@ -115,12 +113,13 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     (url: string, transform?: ModelTransform) => {
       select(null)
       setSource(url)
-      // reflect the source in the URL (?url=…) so the model is shareable.
-      // keep any ?path: on a shared ?url=…&path=… link the selection is
-      // restored once the document loads (UrlParamLoader). Next instruments
-      // replaceState, so deleting ?path here would race the jump and wipe it.
+      // reflect the source in the URL (?url=…) so the model is shareable, and
+      // drop any ?path — a fresh model invalidates the previous selection. The
+      // initial deep-link path is captured by UrlParamLoader *before* this runs,
+      // so clearing it here can't race the restore-on-load jump.
       const params = new URLSearchParams(window.location.search)
       params.set('url', url)
+      params.delete('path')
       window.history.replaceState(null, '', `?${params}`)
       void viewer?.loadUrl(url, transform)
     },
@@ -170,7 +169,6 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       attach,
       openFiles,
       openUrl,
-      source,
       openExample,
       isExample: source === EXAMPLE_MODEL.url,
       jumpTo,
