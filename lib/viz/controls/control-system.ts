@@ -49,6 +49,13 @@ const ALIGNMENT_THRESHOLD = 0.9995
 /** How far past the framing distance the camera may dolly out. */
 const MAX_ZOOM_OUT_FACTOR = 2.5
 
+/** Breathing room around the fitted bounding sphere, per framing kind. */
+const FRAME_MARGIN = 1.2
+const INSPECT_MARGIN = 1.1
+
+/** Home vantage direction (focus → camera): ~35° above the horizon. */
+const HOME_DIRECTION = new Vector3(1, 0.6, 1).normalize()
+
 /**
  * Pluggable camera navigation. Owns the shared focus target, the mode
  * registry and the axis-lock state; every mode implements the same
@@ -163,7 +170,15 @@ class ControlSystem
       this.publish()
     }
 
-    const maxSize = this.moveToBox(box)
+    const { maxSize, distance } = this.moveToBox(
+      box,
+      HOME_DIRECTION,
+      FRAME_MARGIN
+    )
+    // The dolly cap is a whole-model guard set here and left untouched by
+    // inspection — so it stays relative to the root, not a (possibly tiny)
+    // inspected element.
+    this.capDolly(distance)
     this.context.worldRadius = Math.max(maxSize / 2, 0.001)
     this.viewer.grid.fit(this.context.worldRadius)
     this.viewer.environment.fit(this.context.worldRadius)
@@ -176,10 +191,21 @@ class ControlSystem
    */
   inspect(target: InspectTarget, box: Box3) {
     this.setMode('orbit')
-    this.moveToBox(box, 1.6)
+    // Keep the current viewing angle (Blender's Frame Selected) — the user
+    // already has a clear sightline to the item; just recenter and fit. The
+    // dolly cap is intentionally left as the whole-model guard from frame(),
+    // so inspecting a small part doesn't trap the camera inside larger geometry.
+    this.moveToBox(box, this.currentDirection(), INSPECT_MARGIN)
     this.active.syncWithCamera()
     this.inspecting = target
     this.publish()
+  }
+
+  /** Unit direction focus → camera right now, falling back to the home angle. */
+  private currentDirection(): Vector3 {
+    const offset = this.context.camera.position.clone().sub(this.context.target)
+    if (offset.lengthSq() < 1e-8) return HOME_DIRECTION
+    return offset.normalize()
   }
 
   /**
@@ -205,36 +231,48 @@ class ControlSystem
     }
   }
 
-  /** Leave inspection (ESC) and restore the whole-model framing. */
+  /**
+   * Leave inspection (ESC). Stay exactly where the camera is — reframing the
+   * whole model would yank the view and cost the user their visual reference
+   * to the item. The dolly cap is already the whole-model guard, so there's
+   * nothing to restore.
+   */
   exitInspect() {
     if (!this.inspecting) return
     this.inspecting = null
-    const model = this.viewer.model.current
-    if (model) this.frame(model.root)
     this.publish()
   }
 
-  /** Focus the shared target on a box and fit the camera to it. */
-  private moveToBox(box: Box3, fitFactor = 1.5) {
+  /**
+   * Focus the shared target on a box and fit the camera to it along
+   * `direction` (a unit focus → camera vector). Distance fits the box's
+   * bounding sphere, so the framing is angle-independent and never clips as
+   * the camera orbits.
+   */
+  private moveToBox(box: Box3, direction: Vector3, margin: number) {
     const { camera, target } = this.context
     const center = box.getCenter(new Vector3())
     const size = box.getSize(new Vector3())
     const maxSize = Math.max(size.x, size.y, size.z, 0.001)
+    const radius = Math.max(size.length() / 2, 0.001)
 
-    const distance = this.viewer.camera.fitDistance(maxSize) * fitFactor
-
-    // Cap dolly-out relative to this framing so the model can't shrink away.
-    for (const mode of this.modes.values())
-      mode.setMaxDistance?.(distance * MAX_ZOOM_OUT_FACTOR)
+    const distance = this.viewer.camera.fitSphereDistance(radius) * margin
 
     this.viewer.camera.setFrame(distance)
-    camera.position
-      .copy(center)
-      .add(new Vector3(1, 0.6, 1).normalize().multiplyScalar(distance))
+    camera.position.copy(center).addScaledVector(direction, distance)
     camera.lookAt(center)
     target.copy(center)
 
-    return maxSize
+    return { maxSize, distance }
+  }
+
+  /**
+   * Cap how far every mode may dolly out from a framing distance, so the
+   * subject can't shrink away.
+   */
+  private capDolly(distance: number) {
+    const cap = distance * MAX_ZOOM_OUT_FACTOR
+    for (const mode of this.modes.values()) mode.setMaxDistance?.(cap)
   }
 
   update(dt: number) {

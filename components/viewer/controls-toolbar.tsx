@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
+import { Axis3d, Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Cluster } from '@/components/ui/cluster'
@@ -15,7 +15,7 @@ import {
 import type { Axis, ControlModeId } from '@/lib/viz/controls/types'
 
 import { useViewer } from './viewer-provider'
-import { useControlsState, useGridVisible } from './viz-hooks'
+import { useAxesVisible, useControlsState, useGridVisible } from './viz-hooks'
 
 const MODES: {
   id: ControlModeId
@@ -43,6 +43,7 @@ function ControlsToolbar() {
   const { viewer, snapshot } = useViewer()
   const controls = useControlsState()
   const gridVisible = useGridVisible()
+  const axesVisible = useAxesVisible()
 
   // no document → idle showcase: the viewer auto-orbits, controls stay hidden
   if (!viewer || !snapshot.document) return null
@@ -162,6 +163,24 @@ function ControlsToolbar() {
               {gridVisible ? 'Hide floor grid' : 'Show floor grid'}
             </TooltipContent>
           </Tooltip>
+
+          {controls.inspecting ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={axesVisible ? 'default' : 'accent'}
+                  size="icon-sm"
+                  onClick={() => viewer.axes.toggle()}
+                >
+                  <Axis3d />
+                  <span className="sr-only">Toggle element axes</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {axesVisible ? 'Hide element axes' : 'Show element axes'}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
         </Cluster>
       </div>
     </div>

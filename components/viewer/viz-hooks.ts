@@ -52,6 +52,24 @@ function useGridVisible(): boolean {
   )
 }
 
+/** React's view into the AxesSystem visibility. */
+function useAxesVisible(): boolean {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.axes.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.axes.isVisible : () => false,
+    () => false
+  )
+}
+
 const getEmptyAnimations = () => EMPTY_ANIMATIONS_SNAPSHOT
 
 /** React's view into the AnimationSystem playback state. */
@@ -72,4 +90,4 @@ function useAnimationsState(): AnimationsSnapshot {
   )
 }
 
-export { useAnimationsState, useControlsState, useGridVisible }
+export { useAnimationsState, useAxesVisible, useControlsState, useGridVisible }
