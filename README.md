@@ -23,12 +23,3 @@ Everything runs client-side; no files are uploaded.
   `gltf.joyco.studio/?url=https://example.com/model.glb&path=materials.mat_1`.
 - **Local & private** — files are resolved in the browser; nothing leaves the
   machine.
-
-## Getting Started
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Then open [gltf.joyco.studio](https://gltf.joyco.studio/) and drop in a model.
