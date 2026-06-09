@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react'
+import * as React from "react";
+import { ArrowDown, ArrowUp, ChevronRight, ChevronsUpDown } from "lucide-react";
 
 import {
   Table,
@@ -10,31 +10,47 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
-import { InspectContextMenu } from './inspect-context-menu'
-import type { Selection } from './viewer-provider'
+import { InspectContextMenu } from "./inspect-context-menu";
+import type { Selection } from "./viewer-provider";
 
 interface ColumnDef<Row> {
-  key: string
-  header: string
-  cell: (row: Row) => React.ReactNode
+  key: string;
+  header: string;
+  cell: (row: Row) => React.ReactNode;
   /** Comparable value for ordering. Omit to make the column unsortable. */
-  sortValue?: (row: Row) => string | number
-  className?: string
-  headerClassName?: string
-  align?: 'left' | 'right'
+  sortValue?: (row: Row) => string | number;
+  className?: string;
+  headerClassName?: string;
+  align?: "left" | "right";
 }
 
 interface SortState {
-  key: string
-  direction: 'asc' | 'desc'
+  key: string;
+  direction: "asc" | "desc";
 }
 
+/**
+ * Turns the table into an outliner: `data` must already be in depth-first
+ * order, each row reporting its `depth` and whether it `hasChildren`. Sorting
+ * is disabled in this mode (it would scramble the hierarchy); the tree column
+ * gets indentation and a collapse toggle. A collapsed row hides the contiguous
+ * run of deeper rows that follow it.
+ */
+interface TreeConfig<Row> {
+  depth: (row: Row) => number;
+  hasChildren: (row: Row) => boolean;
+  /** Column that carries the indent + toggle. Defaults to the first column. */
+  columnKey?: string;
+}
+
+const INDENT_PER_DEPTH = 14; // px
+
 function compareValues(a: string | number, b: string | number) {
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  return String(a).localeCompare(String(b), undefined, { numeric: true })
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
 
 /**
@@ -46,44 +62,84 @@ function DataTable<Row>({
   columns,
   rowId,
   selectedId,
+  isSelected,
   onRowClick,
   inspectRow,
+  tree,
 }: {
-  data: Row[]
-  columns: ColumnDef<Row>[]
-  rowId: (row: Row) => string
-  selectedId?: string | null
-  onRowClick?: (row: Row) => void
-  /** Adds a right-click "Inspect" action to each row (same effect as ⌘K). */
-  inspectRow?: (row: Row) => { selection: Selection; name: string }
+  data: Row[];
+  columns: ColumnDef<Row>[];
+  rowId: (row: Row) => string;
+  selectedId?: string | null;
+  /** Custom selection test — overrides `selectedId` when a row id can't carry
+   * the selection (e.g. several nodes sharing one mesh in tree mode). */
+  isSelected?: (row: Row) => boolean;
+  onRowClick?: (row: Row) => void;
+  /** Adds a right-click "Inspect" action to each row (same effect as ⌘K).
+   * Return null for rows with nothing to inspect (e.g. group nodes). */
+  inspectRow?: (row: Row) => { selection: Selection; name: string } | null;
+  /** Render as a collapsible hierarchy instead of a flat list. */
+  tree?: TreeConfig<Row>;
 }) {
-  const [sort, setSort] = React.useState<SortState | null>(null)
-  const selectedRowRef = React.useRef<HTMLTableRowElement>(null)
+  const [sort, setSort] = React.useState<SortState | null>(null);
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const selectedRowRef = React.useRef<HTMLTableRowElement>(null);
 
   const sorted = React.useMemo(() => {
-    if (!sort) return data
-    const column = columns.find(({ key }) => key === sort.key)
-    if (!column?.sortValue) return data
-    const { sortValue } = column
-    const factor = sort.direction === 'asc' ? 1 : -1
+    // tree order is meaningful — never reorder it
+    if (tree || !sort) return data;
+    const column = columns.find(({ key }) => key === sort.key);
+    if (!column?.sortValue) return data;
+    const { sortValue } = column;
+    const factor = sort.direction === "asc" ? 1 : -1;
     return [...data].sort(
-      (a, b) => compareValues(sortValue(a), sortValue(b)) * factor
-    )
-  }, [data, columns, sort])
+      (a, b) => compareValues(sortValue(a), sortValue(b)) * factor,
+    );
+  }, [data, columns, sort, tree]);
+
+  // Walk the DFS list, dropping every row that sits under a collapsed ancestor.
+  const visibleRows = React.useMemo(() => {
+    if (!tree) return sorted;
+    const rows: Row[] = [];
+    let hideBelow = Infinity;
+    for (const row of sorted) {
+      const depth = tree.depth(row);
+      if (depth > hideBelow) continue;
+      hideBelow = Infinity;
+      rows.push(row);
+      if (tree.hasChildren(row) && collapsed.has(rowId(row))) {
+        hideBelow = depth;
+      }
+    }
+    return rows;
+  }, [tree, sorted, collapsed, rowId]);
+
+  const treeColumnKey = tree ? (tree.columnKey ?? columns[0]?.key) : null;
+
+  const toggleCollapse = (id: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const toggleSort = (key: string) => {
     setSort((current) => {
-      if (current?.key !== key) return { key, direction: 'asc' }
-      if (current.direction === 'asc') return { key, direction: 'desc' }
-      return null
-    })
-  }
+      if (current?.key !== key) return { key, direction: "asc" };
+      if (current.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
 
   React.useEffect(() => {
     if (selectedId) {
-      selectedRowRef.current?.scrollIntoView({ block: 'center' })
+      selectedRowRef.current?.scrollIntoView({ block: "center" });
     }
-  }, [selectedId])
+  }, [selectedId]);
 
   return (
     <Table>
@@ -93,23 +149,23 @@ function DataTable<Row>({
             <TableHead
               key={column.key}
               className={cn(
-                'whitespace-nowrap font-mono text-xs uppercase tracking-wide',
-                column.align === 'right' && 'text-right',
-                column.headerClassName
+                "whitespace-nowrap font-mono text-xs uppercase tracking-wide",
+                column.align === "right" && "text-right",
+                column.headerClassName,
               )}
             >
-              {column.sortValue ? (
+              {column.sortValue && !tree ? (
                 <button
                   type="button"
                   onClick={() => toggleSort(column.key)}
                   className={cn(
-                    'inline-flex items-center gap-1 uppercase tracking-wide outline-none hover:text-foreground focus-visible:text-foreground',
-                    sort?.key === column.key && 'text-foreground'
+                    "inline-flex items-center gap-1 uppercase tracking-wide outline-none hover:text-foreground focus-visible:text-foreground",
+                    sort?.key === column.key && "text-foreground",
                   )}
                 >
                   {column.header}
                   {sort?.key === column.key ? (
-                    sort.direction === 'asc' ? (
+                    sort.direction === "asc" ? (
                       <ArrowUp className="size-3" />
                     ) : (
                       <ArrowDown className="size-3" />
@@ -126,46 +182,78 @@ function DataTable<Row>({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {sorted.map((row) => {
-          const id = rowId(row)
-          const selected = id === selectedId
+        {visibleRows.map((row) => {
+          const id = rowId(row);
+          const selected = isSelected ? isSelected(row) : id === selectedId;
           const tableRow = (
             <TableRow
               ref={selected ? selectedRowRef : undefined}
-              data-state={selected ? 'selected' : undefined}
+              data-state={selected ? "selected" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
-                onRowClick && 'cursor-pointer',
-                selected && 'bg-primary/10 hover:bg-primary/15'
+                onRowClick && "cursor-pointer",
+                selected && "bg-primary/10 hover:bg-primary/15",
               )}
             >
               {columns.map((column) => (
                 <TableCell
                   key={column.key}
                   className={cn(
-                    'align-top font-mono text-xs',
-                    column.align === 'right' && 'text-right',
-                    column.className
+                    "align-top font-mono text-xs",
+                    column.align === "right" && "text-right",
+                    column.className,
                   )}
                 >
-                  {column.cell(row)}
+                  {tree && column.key === treeColumnKey ? (
+                    <span
+                      className="flex items-center gap-1"
+                      style={{
+                        paddingLeft: tree.depth(row) * INDENT_PER_DEPTH,
+                      }}
+                    >
+                      {tree.hasChildren(row) ? (
+                        <button
+                          type="button"
+                          aria-label={collapsed.has(id) ? "Expand" : "Collapse"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleCollapse(id);
+                          }}
+                          className="-ml-0.5 shrink-0 text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "size-3 transition-transform",
+                              !collapsed.has(id) && "rotate-90",
+                            )}
+                          />
+                        </button>
+                      ) : (
+                        <span className="inline-block size-3 shrink-0" />
+                      )}
+                      {column.cell(row)}
+                    </span>
+                  ) : (
+                    column.cell(row)
+                  )}
                 </TableCell>
               ))}
             </TableRow>
-          )
+          );
 
-          return inspectRow ? (
-            <InspectContextMenu key={id} {...inspectRow(row)}>
+          const inspect = inspectRow?.(row);
+          return inspect ? (
+            <InspectContextMenu key={id} {...inspect}>
               {tableRow}
             </InspectContextMenu>
           ) : (
             <React.Fragment key={id}>{tableRow}</React.Fragment>
-          )
+          );
         })}
       </TableBody>
     </Table>
-  )
+  );
 }
 
-export { DataTable }
-export type { ColumnDef }
+export { DataTable };
+export type { ColumnDef };

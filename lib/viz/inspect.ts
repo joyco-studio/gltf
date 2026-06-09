@@ -22,6 +22,22 @@ interface GltfMeshInfo {
   materialNames: string[]
 }
 
+/**
+ * One node of the scene graph, flattened into a depth-first list. `depth` and
+ * `hasChildren` are all the tree view needs to render indentation and toggles;
+ * a collapsed row hides the contiguous run of following rows with a greater
+ * depth. `meshId` ties a node to its mesh's stats (null for transform/group
+ * nodes, which render as parent rows with empty columns).
+ */
+interface GltfNodeInfo {
+  kind: 'node'
+  id: number
+  name: string
+  depth: number
+  hasChildren: boolean
+  meshId: number | null
+}
+
 interface GltfMaterialInfo {
   kind: 'material'
   id: number
@@ -68,6 +84,8 @@ interface GltfSceneInfo {
 interface GltfDocumentInfo {
   fileName: string
   scene: GltfSceneInfo
+  /** Scene graph flattened to a DFS list — the source for the tree view. */
+  nodes: GltfNodeInfo[]
   meshes: GltfMeshInfo[]
   materials: GltfMaterialInfo[]
   textures: GltfTextureInfo[]
@@ -106,12 +124,15 @@ interface GltfJson {
   }[]
   bufferViews?: { byteLength: number }[]
   nodes?: {
+    name?: string
     mesh?: number
+    children?: number[]
     extensions?: {
       EXT_mesh_gpu_instancing?: { attributes?: Record<string, number> }
     }
   }[]
-  scenes?: { name?: string }[]
+  scene?: number
+  scenes?: { name?: string; nodes?: number[] }[]
   animations?: {
     name?: string
     channels?: { sampler: number }[]
@@ -272,6 +293,61 @@ function buildMeshInfos(json: GltfJson, materialNames: string[]) {
       materialNames: ids.map((index) => materialNames[index] ?? `${index}`),
     }
   })
+}
+
+/**
+ * Walks the scene graph depth-first into a flat, pre-ordered node list. Roots
+ * come from the active scene (or, lacking scenes, every node that isn't some
+ * other node's child). A `seen` guard keeps a malformed file with a node cycle
+ * from recursing forever. Node names fall back to the referenced mesh's name,
+ * then a synthetic `node_<i>`, mirroring how editors label unnamed nodes.
+ */
+function buildNodeInfos(
+  json: GltfJson,
+  meshes: GltfMeshInfo[]
+): GltfNodeInfo[] {
+  const nodes = json.nodes ?? []
+  if (nodes.length === 0) return []
+
+  const scene = json.scenes?.[json.scene ?? 0]
+  const roots =
+    scene?.nodes ??
+    nodes
+      .map((_, index) => index)
+      .filter(
+        (index) => !nodes.some((node) => node.children?.includes(index))
+      )
+
+  const list: GltfNodeInfo[] = []
+  const seen = new Set<number>()
+
+  const visit = (index: number, depth: number) => {
+    const node = nodes[index]
+    if (!node || seen.has(index)) return
+    seen.add(index)
+
+    const children = node.children ?? []
+    const meshId = node.mesh ?? null
+
+    list.push({
+      kind: 'node',
+      id: index,
+      // `||` (not `??`): unnamed nodes often carry an empty string, which
+      // should fall through to the mesh name and then a synthetic label.
+      name:
+        node.name?.trim() ||
+        (meshId !== null ? meshes[meshId]?.name : undefined) ||
+        `node_${index}`,
+      depth,
+      hasChildren: children.length > 0,
+      meshId,
+    })
+
+    for (const child of children) visit(child, depth + 1)
+  }
+
+  for (const root of roots) visit(root, 0)
+  return list
 }
 
 function buildMaterialInfos(json: GltfJson, meshes: GltfMeshInfo[]) {
@@ -479,6 +555,7 @@ async function inspectGltf(
   )
 
   const meshes = buildMeshInfos(json, materialNames)
+  const nodes = buildNodeInfos(json, meshes)
   const materials = buildMaterialInfos(json, meshes)
   const textures = await buildTextureInfos(gltf, json, materials)
 
@@ -493,6 +570,7 @@ async function inspectGltf(
       ),
       animationCount: json.animations?.length ?? 0,
     },
+    nodes,
     meshes,
     materials,
     textures,
@@ -503,6 +581,7 @@ async function inspectGltf(
 export { inspectGltf }
 export type {
   GltfDocumentInfo,
+  GltfNodeInfo,
   GltfMeshInfo,
   GltfMaterialInfo,
   GltfTextureInfo,
