@@ -24,19 +24,12 @@ function ViewerHeader() {
   return (
     <header className="absolute inset-x-4 top-4 z-30">
       <Cluster bg="accent">
-        <div className="flex items-center gap-2.5 self-stretch px-3">
+        <div className="flex bg-primary text-primary-foreground items-center gap-2.5 self-stretch px-3">
           <Logo className="h-4" />
-          <h1 className="font-heading text-sm font-semibold uppercase tracking-wide">
-            glTF
-          </h1>
         </div>
 
         {document ? (
           <>
-            <Separator
-              orientation="vertical"
-              className="h-auto self-stretch [--thickness:0.5px]"
-            />
             <div className="flex min-w-0 items-center gap-2 self-stretch px-3 font-mono text-xs text-muted-foreground">
               <span className="max-w-48 truncate text-foreground">
                 {document.fileName}
