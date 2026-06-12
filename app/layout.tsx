@@ -4,9 +4,25 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
+const title = "GLTF | JOYCO";
+const description =
+  "Inspect glTF files: browse meshes, materials and textures with a three.js viewport.";
+
 export const metadata: Metadata = {
-  title: "GLTF | JOYCO",
-  description: "Inspect glTF files: browse meshes, materials and textures with a three.js viewport.",
+  metadataBase: new URL("https://gltf.joyco.studio"),
+  title,
+  description,
+  openGraph: {
+    type: "website",
+    title,
+    description,
+    siteName: "GLTF | JOYCO",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
 };
 
 export default function RootLayout({
