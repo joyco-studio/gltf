@@ -72,7 +72,7 @@ function EmptyState() {
                 <a
                   href="https://joyco.studio"
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noreferrer noopener"
                   className="group inline-flex items-center gap-1 transition-colors hover:text-foreground"
                 >
                   joyco.studio
