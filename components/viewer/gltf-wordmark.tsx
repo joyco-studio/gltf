@@ -34,4 +34,24 @@ function GltfWordmark({ className, ...props }: React.ComponentProps<"svg">) {
   );
 }
 
-export { GltfWordmark };
+/** Just the "G" glyph from the wordmark, for use as a large standalone mark. */
+function GltfGlyph({ className, ...props }: React.ComponentProps<"svg">) {
+  return (
+    <svg
+      viewBox="0 0 145.868 89.488"
+      fill="none"
+      role="img"
+      aria-label="GLTF"
+      className={cn("h-auto w-full", className)}
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M33.9089 0.473291L0.003634 34.3776L0.00363548 0.473289L0.00265892 0.473289L0.00265503 89.4879L73.7146 89.4879L112.596 49.445L112.596 89.4879L145.868 89.4879L145.868 41.3307L113.651 41.3307L95.0124 60.2477L95.0124 60.2555L23.5632 60.2555L23.5632 33.9928L145.868 33.9928L145.868 33.9909L111.25 33.9909L145.868 0.52603L145.868 0.473296L33.9089 0.473291Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export { GltfWordmark, GltfGlyph };
