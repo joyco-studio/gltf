@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileUp, LoaderCircle } from "lucide-react";
+import { ArrowUpRight, FileUp, LoaderCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
@@ -23,7 +23,7 @@ function JoycoMark({ className }: { className?: string }) {
       viewBox="0 0 50.6278 20.7114"
       fill="none"
       aria-hidden="true"
-      className={cn("h-3.5 w-auto text-muted-foreground/60", className)}
+      className={cn("h-3.5 w-auto", className)}
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
@@ -56,43 +56,56 @@ function EmptyState() {
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
       {/* outer frame — 32px padding all around the inner container */}
-      <div className="pointer-events-auto relative w-full max-w-[800px] border bg-background/90 p-8 font-mono backdrop-blur-xs">
+      <div className="pointer-events-auto relative w-full max-w-[800px] border bg-background/90 p-5 font-mono backdrop-blur-xs md:p-8">
         {/* frame cut-lines, extended to the tips */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-8 h-px bg-border/50" />
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-8 h-px bg-border/50" />
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-8 w-px bg-border/50" />
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-8 w-px bg-border/50" />
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-5 h-px bg-border/50 md:top-8" />
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-5 h-px bg-border/50 md:bottom-8" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-5 w-px bg-border/50 md:left-8" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-5 w-px bg-border/50 md:right-8" />
 
         <div className="relative">
-          {/* header row — joyco | press ⌘K */}
-          <div className="grid grid-cols-2">
-            <div className="flex h-8 items-center justify-between gap-2 whitespace-nowrap bg-foreground/[0.05] px-3 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              by joyco.studio ↗
+          {/* header — on mobile: [joyco + logo] over [press]; on desktop: [press] | [joyco] */}
+          <div className="flex flex-col md:grid md:grid-cols-2">
+            <div className="order-1 flex h-8 items-center justify-between gap-1 whitespace-nowrap px-3 text-sm uppercase tracking-[0.12em] text-muted-foreground md:order-2 md:justify-start md:border-l">
+              <span className="flex items-center gap-1">
+                by
+                <a
+                  href="https://joyco.studio"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                >
+                  joyco.studio
+                  <ArrowUpRight className="size-3.5 shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
+                </a>
+              </span>
+              {/* logo sits inline on mobile, absolute top-right on desktop */}
+              <JoycoMark className="h-5 w-auto text-muted-foreground/60 md:hidden" />
             </div>
-            <div className="flex h-8 items-center gap-1.5 whitespace-nowrap border-l px-3 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/70">
+            <div className="order-2 flex h-8 items-center gap-1.5 whitespace-nowrap bg-foreground/[0.05] px-3 text-sm uppercase tracking-[0.12em] text-muted-foreground/70 md:order-1">
               press
               <KbdGroup>
-                <Kbd>⌘</Kbd>
-                <Kbd>K</Kbd>
+                <Kbd className="bg-background">⌘</Kbd>
+                <Kbd className="bg-background">K</Kbd>
               </KbdGroup>
               to search
             </div>
           </div>
 
-          {/* logo mark, top-right corner */}
-          <JoycoMark className="absolute right-0 top-0 h-8 w-auto text-muted-foreground/60" />
+          {/* logo mark, top-right corner (desktop only) */}
+          <JoycoMark className="absolute right-0 top-0 hidden h-8 w-auto text-muted-foreground/60 md:block" />
 
           {/* line under the header */}
-          <div aria-hidden className="-mx-8 h-px bg-border/50" />
+          <div aria-hidden className="-mx-5 h-px bg-border/50 md:-mx-8" />
 
-          {/* gap band (32px) then the line that opens the main row */}
-          <div aria-hidden className="-mx-8 mt-8 h-px bg-border/50" />
+          {/* gap band then the line that opens the main row */}
+          <div aria-hidden className="-mx-5 mt-5 h-px bg-border/50 md:-mx-8 md:mt-8" />
 
           {/* main row — GLTF glyph on hatch | copy */}
-          <div className="grid h-[220px] grid-cols-2">
+          <div className="grid grid-cols-1 md:h-[220px] md:grid-cols-2">
             <div
               style={hatchStyle}
-              className="relative flex items-center justify-center overflow-hidden"
+              className="relative flex min-h-[160px] items-center justify-center overflow-hidden md:min-h-0"
             >
               {/* glyph band — horizontal guidelines hug the glyph top & bottom (full width) */}
               <div className="relative z-10 flex w-full justify-center border-y border-border/50">
@@ -105,16 +118,16 @@ function EmptyState() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center border-l px-8 py-12">
+            <div className="flex flex-col items-center justify-center border-t px-5 py-8 md:border-l md:border-t-0 md:px-8 md:py-12">
               <div className="flex flex-col gap-4 text-left">
-                <p className="font-sans text-lg font-semibold tracking-tight text-foreground">
+                <h2 className="font-sans text-lg font-semibold tracking-tight text-foreground">
                   Drop a .GLB/.GLTF File
-                </p>
-                <p className="max-w-[231px] text-[14px] leading-relaxed text-muted-foreground">
+                </h2>
+                <p className="max-w-[231px] text-sm leading-relaxed text-muted-foreground">
                   or paste a URL to inspect meshes and materials
                 </p>
                 {snapshot.status === "error" && snapshot.error ? (
-                  <p className="max-w-[231px] text-[14px] text-destructive">
+                  <p className="max-w-[231px] text-sm text-destructive">
                     {snapshot.error}
                   </p>
                 ) : null}
@@ -122,22 +135,23 @@ function EmptyState() {
             </div>
           </div>
 
-          {/* line above the actions */}
-          <div aria-hidden className="-mx-8 h-px bg-border/50" />
+          {/* line that closes the main row, then a gap band, then the line that opens the actions */}
+          <div aria-hidden className="-mx-5 h-px bg-border/50 md:-mx-8" />
+          <div aria-hidden className="-mx-5 mt-5 h-px bg-border/50 md:-mx-8 md:mt-8" />
 
           {/* actions row — try sample | upload */}
           <div className="grid grid-cols-2">
             <button
               type="button"
               onClick={openExample}
-              className="flex items-center justify-center px-3 py-3.5 text-[16px] text-muted-foreground underline decoration-from-font underline-offset-4 transition-colors hover:text-foreground"
+              className="flex cursor-pointer items-center justify-center px-3 py-3.5 text-base text-muted-foreground underline decoration-from-font underline-offset-4 transition-colors hover:text-foreground"
             >
               Try sample model
             </button>
             <button
               type="button"
               onClick={openPicker}
-              className="flex items-center justify-center gap-2 border-l bg-primary px-4 py-3.5 text-[16px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="flex cursor-pointer items-center justify-center gap-2 border-l bg-primary px-4 py-3.5 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <FileUp className="size-4" />
               upload 3D file
