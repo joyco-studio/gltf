@@ -40,8 +40,7 @@ function GltfGlyph({ className, ...props }: React.ComponentProps<"svg">) {
     <svg
       viewBox="0 0 145.868 89.488"
       fill="none"
-      role="img"
-      aria-label="GLTF"
+      aria-hidden="true"
       className={cn("h-auto w-full", className)}
       xmlns="http://www.w3.org/2000/svg"
       {...props}
