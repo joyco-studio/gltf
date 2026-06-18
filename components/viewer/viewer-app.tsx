@@ -2,14 +2,11 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { FileUp, LoaderCircle } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 import { ControlsToolbar } from "./controls-toolbar";
+import { EmptyState } from "./empty-state";
 import { EXAMPLE_MODEL } from "./example-model";
-import { FileDropZone, parseHttpUrl, useFilePicker } from "./file-drop-zone";
+import { FileDropZone, parseHttpUrl } from "./file-drop-zone";
 import { resolveSharePath } from "./share-path";
 import { InspectBanner } from "./inspect-banner";
 import { InspectorPanel } from "./inspector-panel";
@@ -17,63 +14,6 @@ import { SearchCommand } from "./search-command";
 import { ViewerCanvas } from "./viewer-canvas";
 import { ViewerHeader } from "./viewer-header";
 import { ViewerProvider, useViewer } from "./viewer-provider";
-
-function EmptyState() {
-  const { snapshot, openExample } = useViewer();
-  const { input, openPicker } = useFilePicker();
-
-  if (snapshot.status === "loading") {
-    return (
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-        <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (snapshot.status !== "empty" && snapshot.status !== "error") return null;
-
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center">
-      <div className="pointer-events-auto flex flex-col max-w-[calc(100%-2rem)] sm:max-w-md items-center gap-4 border border-dashed bg-background/85 px-12 py-10 text-center backdrop-blur-xs">
-        <FileUp className="size-8 text-muted-foreground" />
-        <div className="flex flex-col gap-1">
-          <p className="font-heading text-sm font-semibold uppercase tracking-wide">
-            Drop a .glb / .gltf anywhere
-          </p>
-          <p className="font-mono text-xs text-muted-foreground">
-            or paste a URL — then browse its meshes, materials and textures,
-            press{" "}
-            <KbdGroup className="inline-flex">
-              <Kbd>⌘</Kbd>
-              <Kbd>K</Kbd>
-            </KbdGroup>{" "}
-            to search
-          </p>
-        </div>
-        {snapshot.status === "error" && snapshot.error ? (
-          <p className="max-w-sm font-mono text-xs text-destructive">
-            {snapshot.error}
-          </p>
-        ) : null}
-        <Button onClick={openPicker}>
-          <FileUp />
-          Open file
-        </Button>
-        <p className="font-mono text-xs text-muted-foreground">
-          or{" "}
-          <button
-            type="button"
-            onClick={openExample}
-            className="underline underline-offset-2 transition-colors hover:text-foreground"
-          >
-            try example
-          </button>
-        </p>
-        {input}
-      </div>
-    </div>
-  );
-}
 
 /**
  * Consumes the initial deep link: loads `?url=` once the viewer is attached,
