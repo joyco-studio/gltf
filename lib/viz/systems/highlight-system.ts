@@ -20,6 +20,7 @@ import {
 import type { InspectTarget } from '../controls/control-system'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
+import type { LoadedModel } from './model-system'
 
 /** Screen-space stripe rhythm, in CSS pixels. */
 const STRIPE_SPACING_PX = 10
@@ -76,8 +77,15 @@ class HighlightSystem implements System {
   private highlightNode = createHighlightNode()
   private ghost!: MeshBasicNodeMaterial
   private swaps: MaterialSwap[] = []
-  /** Cache per source material so shared materials convert once per inspect. */
+  /**
+   * Promoted node-materials, keyed by their source. Retained for the lifetime
+   * of the model they belong to — hover fires at pointer-move rate, so
+   * disposing/re-converting per transition would churn shaders through the
+   * renderer. Dropped wholesale only when the model itself changes.
+   */
   private converted = new Map<Material, NodeMaterial>()
+  /** Model the `converted` cache currently belongs to, for invalidation. */
+  private cachedModel: LoadedModel | null = null
   /** The framed target (⌘K / table / pick), ghosting everything else. */
   private inspecting: InspectTarget | null = null
   /** A transient pick preview (⌘-hover), lit without ghosting. */
@@ -160,10 +168,17 @@ class HighlightSystem implements System {
 
   private apply() {
     this.restore()
+
+    // a new model invalidates every promoted material from the old one
+    const model = this.viewer.model
+    if (model.current !== this.cachedModel) {
+      this.disposeConverted()
+      this.cachedModel = model.current
+    }
+
     const { inspecting, hovered } = this
     if (!inspecting && !hovered) return
 
-    const model = this.viewer.model
     const focused = inspecting
       ? new Set(model.getMeshesForTarget(inspecting))
       : null
@@ -205,12 +220,16 @@ class HighlightSystem implements System {
   private restore() {
     for (const { mesh, original } of this.swaps) mesh.material = original
     this.swaps = []
+  }
+
+  private disposeConverted() {
     for (const material of this.converted.values()) material.dispose()
     this.converted.clear()
   }
 
   dispose() {
     this.restore()
+    this.disposeConverted()
     this.ghost.dispose()
   }
 }
