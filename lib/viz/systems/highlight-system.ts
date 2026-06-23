@@ -78,7 +78,11 @@ class HighlightSystem implements System {
   private swaps: MaterialSwap[] = []
   /** Cache per source material so shared materials convert once per inspect. */
   private converted = new Map<Material, NodeMaterial>()
-  /** Target currently applied, so redundant publishes don't re-swap. */
+  /** The framed target (⌘K / table / pick), ghosting everything else. */
+  private inspecting: InspectTarget | null = null
+  /** A transient pick preview (ctrl-hover), lit without ghosting. */
+  private hovered: InspectTarget | null = null
+  /** Composite of both targets currently applied, so redundant calls no-op. */
   private appliedKey: string | null = null
 
   init(viewer: Viewer) {
@@ -93,15 +97,32 @@ class HighlightSystem implements System {
     this.ghost.opacityNode = float(GHOST_OPACITY)
 
     // stay in sync with the inspect state — fully event-driven
-    viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+    viewer.controls.on('change', ({ inspecting }) => {
+      this.inspecting = inspecting
+      this.refresh()
+    })
   }
 
-  /** Only touch materials when the inspected target actually changes. */
-  private sync(target: InspectTarget | null) {
-    const key = target ? `${target.kind}:${target.id}` : null
+  /**
+   * Spotlight a mesh under the cursor (ctrl-hover pick preview) without
+   * ghosting the rest — `null` clears it. The framed inspection, if any,
+   * always wins, so its meshes never get a redundant hover swap.
+   */
+  setHovered(target: InspectTarget | null) {
+    this.hovered = target
+    this.refresh()
+  }
+
+  private keyOf(target: InspectTarget | null) {
+    return target ? `${target.kind}:${target.id}` : '-'
+  }
+
+  /** Only touch materials when one of the two targets actually changes. */
+  private refresh() {
+    const key = `${this.keyOf(this.inspecting)}|${this.keyOf(this.hovered)}`
     if (key === this.appliedKey) return
     this.appliedKey = key
-    this.apply(target)
+    this.apply()
   }
 
   private promote(material: Material): Material {
@@ -125,36 +146,55 @@ class HighlightSystem implements System {
     return nodeMaterial
   }
 
-  private apply(target: InspectTarget | null) {
+  /** Promote whichever primitives a predicate accepts; leave the rest as-is. */
+  private highlight(
+    original: Material | Material[],
+    matches: (material: Material) => boolean
+  ): Material | Material[] {
+    return Array.isArray(original)
+      ? original.map((entry) => (matches(entry) ? this.promote(entry) : entry))
+      : matches(original)
+        ? this.promote(original)
+        : original
+  }
+
+  private apply() {
     this.restore()
-    if (target === null) return
+    const { inspecting, hovered } = this
+    if (!inspecting && !hovered) return
 
     const model = this.viewer.model
-    const focused = new Set(model.getMeshesForTarget(target))
+    const focused = inspecting
+      ? new Set(model.getMeshesForTarget(inspecting))
+      : null
+    const preview = hovered
+      ? new Set(model.getMeshesForTarget(hovered))
+      : null
 
-    // for material/texture targets only the matching materials light up —
+    // for material/texture inspects only the matching primitives light up —
     // other primitives of the same mesh stay untouched
-    const matches = (material: Material) =>
-      target.kind === 'mesh'
+    const matchesInspect = (material: Material) =>
+      !inspecting || inspecting.kind === 'mesh'
         ? true
-        : target.kind === 'material'
-          ? model.getMaterialId(material) === target.id
-          : model.materialUsesTexture(material, target.id)
+        : inspecting.kind === 'material'
+          ? model.getMaterialId(material) === inspecting.id
+          : model.materialUsesTexture(material, inspecting.id)
 
     // single pass over the whole model: every mesh starts from its true
     // original (restore ran first), so each captured `original` is genuine
     for (const mesh of model.getAllMeshes()) {
       const original = mesh.material
-      if (focused.has(mesh)) {
-        mesh.material = Array.isArray(original)
-          ? original.map((entry) =>
-              matches(entry) ? this.promote(entry) : entry
-            )
-          : matches(original)
-            ? this.promote(original)
-            : original
-      } else {
+      if (focused?.has(mesh)) {
+        mesh.material = this.highlight(original, matchesInspect)
+      } else if (preview?.has(mesh)) {
+        // a hovered pick preview always lights up whole
+        mesh.material = this.highlight(original, () => true)
+      } else if (inspecting) {
+        // something is framed → everything else recedes into context
         mesh.material = this.ghost
+      } else {
+        // hover only, nothing framed: leave the rest of the model untouched
+        continue
       }
       this.swaps.push({ mesh, original })
     }

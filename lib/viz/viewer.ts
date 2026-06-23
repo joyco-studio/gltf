@@ -16,6 +16,7 @@ import {
   type LoadedModel,
   type ModelTransform,
 } from './systems/model-system'
+import { PickSystem } from './systems/pick-system'
 import { RenderSystem } from './systems/render-system'
 
 type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
@@ -28,6 +29,8 @@ interface ViewerSnapshot {
 
 interface ViewerEvents extends Record<string, unknown> {
   change: ViewerSnapshot
+  /** A mesh was picked directly in the viewport (Ctrl-click). */
+  pick: { kind: 'mesh'; id: number; name: string }
 }
 
 const EMPTY_SNAPSHOT: ViewerSnapshot = {
@@ -51,6 +54,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly bounds: BoundsSystem
   readonly model: ModelSystem
   readonly highlight: HighlightSystem
+  readonly pick: PickSystem
   readonly axes: AxesSystem
   readonly animations: AnimationSystem
 
@@ -71,6 +75,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.bounds = new BoundsSystem()
     this.model = new ModelSystem()
     this.highlight = new HighlightSystem()
+    this.pick = new PickSystem(canvas)
     this.axes = new AxesSystem()
     this.animations = new AnimationSystem()
 
@@ -83,6 +88,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.bounds,
       this.model,
       this.highlight,
+      this.pick,
       this.axes,
       this.animations,
       this.render,

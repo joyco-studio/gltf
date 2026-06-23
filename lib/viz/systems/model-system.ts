@@ -199,6 +199,32 @@ class ModelSystem implements System {
     return this.collectMeshes(() => true)
   }
 
+  /**
+   * glTF document mesh index a runtime object belongs to — walks up from a
+   * raycast hit (the `Mesh` primitive) to the nearest object the parser
+   * associated with a document mesh. `undefined` for anything not from the
+   * loaded glTF (helpers, the grid, etc.).
+   */
+  getMeshIdForObject(object: Object3D): number | undefined {
+    let current: Object3D | null = object
+    while (current) {
+      if (current instanceof Mesh) {
+        const id = this.associations?.get(current)?.meshes
+        if (id !== undefined) return id
+      }
+      current = current.parent
+    }
+    return undefined
+  }
+
+  /** Document name of a glTF mesh by index, with the same fallback as the UI. */
+  getMeshName(meshId: number): string {
+    const json = this.current?.gltf.parser.json as
+      | { meshes?: { name?: string }[] }
+      | undefined
+    return json?.meshes?.[meshId]?.name ?? `mesh_${meshId}`
+  }
+
   /** Renderables an inspect target resolves to (mesh / material / texture). */
   getMeshesForTarget(target: InspectTarget): Mesh[] {
     return target.kind === 'mesh'
