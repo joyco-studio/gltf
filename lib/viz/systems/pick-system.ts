@@ -10,14 +10,14 @@ interface PickHit {
 }
 
 /**
- * Direct picking in the viewport: while Ctrl is held, the mesh under the
+ * Direct picking in the viewport: while ⌘ (Cmd) is held, the mesh under the
  * cursor lights up as a preview (HighlightSystem), and clicking it inspects
  * it — the same effect as picking it from the ⌘K search or the contents
  * table. The currently inspected mesh is intentionally skipped, so the
  * gesture only ever moves focus to *other* meshes.
  *
- * Raycasting is gated behind Ctrl so it never competes with plain orbit/fly
- * navigation, and only runs on actual pointer movement (or when Ctrl is first
+ * Raycasting is gated behind ⌘ so it never competes with plain orbit/fly
+ * navigation, and only runs on actual pointer movement (or when ⌘ is first
  * pressed), never per frame.
  */
 class PickSystem implements System {
@@ -26,11 +26,11 @@ class PickSystem implements System {
   private raycaster = new Raycaster()
   private pointer = new Vector2()
 
-  /** Last cursor position, so pressing Ctrl can preview without a move. */
+  /** Last cursor position, so pressing ⌘ can preview without a move. */
   private last: { x: number; y: number } | null = null
   /** Whether the cursor is currently over the canvas. */
   private inside = false
-  private ctrlActive = false
+  private metaActive = false
   private hovered: InspectTarget | null = null
 
   constructor(canvas: HTMLCanvasElement) {
@@ -43,7 +43,6 @@ class PickSystem implements System {
     this.canvas.addEventListener('pointermove', this.onPointerMove)
     this.canvas.addEventListener('pointerdown', this.onPointerDown)
     this.canvas.addEventListener('pointerleave', this.onPointerLeave)
-    this.canvas.addEventListener('contextmenu', this.onContextMenu)
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
     window.addEventListener('blur', this.onBlur)
@@ -78,13 +77,13 @@ class PickSystem implements System {
 
   /** Re-evaluate the hover preview against the last known cursor position. */
   private updateHover() {
-    if (!this.ctrlActive || !this.inside || this.last === null) {
+    if (!this.metaActive || !this.inside || this.last === null) {
       this.clearHover()
       return
     }
 
     const pick = this.pickAt(this.last.x, this.last.y)
-    // never preview the mesh that's already framed — Ctrl-hover only ever
+    // never preview the mesh that's already framed — ⌘-hover only ever
     // points at *other* meshes to switch to
     const target =
       pick && pick.id !== this.inspectedMeshId ? pick : null
@@ -109,14 +108,14 @@ class PickSystem implements System {
   private onPointerMove = (event: PointerEvent) => {
     this.last = { x: event.clientX, y: event.clientY }
     this.inside = true
-    this.ctrlActive = event.ctrlKey
+    this.metaActive = event.metaKey
     this.updateHover()
   }
 
   private onPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || !event.ctrlKey) return
+    if (event.button !== 0 || !event.metaKey) return
     this.last = { x: event.clientX, y: event.clientY }
-    this.ctrlActive = true
+    this.metaActive = true
 
     const pick = this.pickAt(event.clientX, event.clientY)
     if (!pick || pick.id === this.inspectedMeshId) return
@@ -133,26 +132,20 @@ class PickSystem implements System {
     this.clearHover()
   }
 
-  private onContextMenu = (event: MouseEvent) => {
-    // macOS raises contextmenu on Ctrl-click — suppress it so the gesture
-    // registers as a pick instead of opening the browser menu
-    if (event.ctrlKey) event.preventDefault()
-  }
-
   private onKeyDown = (event: KeyboardEvent) => {
-    if (!event.ctrlKey) return
-    this.ctrlActive = true
+    if (!event.metaKey) return
+    this.metaActive = true
     this.updateHover()
   }
 
   private onKeyUp = (event: KeyboardEvent) => {
-    if (event.ctrlKey) return
-    this.ctrlActive = false
+    if (event.metaKey) return
+    this.metaActive = false
     this.clearHover()
   }
 
   private onBlur = () => {
-    this.ctrlActive = false
+    this.metaActive = false
     this.clearHover()
   }
 
@@ -161,7 +154,6 @@ class PickSystem implements System {
     this.canvas.removeEventListener('pointermove', this.onPointerMove)
     this.canvas.removeEventListener('pointerdown', this.onPointerDown)
     this.canvas.removeEventListener('pointerleave', this.onPointerLeave)
-    this.canvas.removeEventListener('contextmenu', this.onContextMenu)
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('keyup', this.onKeyUp)
     window.removeEventListener('blur', this.onBlur)

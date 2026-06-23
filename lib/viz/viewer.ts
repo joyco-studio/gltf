@@ -29,7 +29,7 @@ interface ViewerSnapshot {
 
 interface ViewerEvents extends Record<string, unknown> {
   change: ViewerSnapshot
-  /** A mesh was picked directly in the viewport (Ctrl-click). */
+  /** A mesh was picked directly in the viewport (⌘-click). */
   pick: { kind: 'mesh'; id: number; name: string }
 }
 

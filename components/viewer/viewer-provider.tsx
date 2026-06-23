@@ -90,7 +90,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     getEmptySnapshot
   )
 
-  // A viewport Ctrl-click frames + highlights the mesh in the engine on its
+  // A viewport ⌘-click frames + highlights the mesh in the engine on its
   // own; mirror it into the React UI so the sidebar selection and ?path stay
   // in step with the ⌘K / table inspect flows.
   React.useEffect(() => {

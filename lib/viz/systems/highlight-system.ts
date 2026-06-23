@@ -80,7 +80,7 @@ class HighlightSystem implements System {
   private converted = new Map<Material, NodeMaterial>()
   /** The framed target (⌘K / table / pick), ghosting everything else. */
   private inspecting: InspectTarget | null = null
-  /** A transient pick preview (ctrl-hover), lit without ghosting. */
+  /** A transient pick preview (⌘-hover), lit without ghosting. */
   private hovered: InspectTarget | null = null
   /** Composite of both targets currently applied, so redundant calls no-op. */
   private appliedKey: string | null = null
@@ -104,7 +104,7 @@ class HighlightSystem implements System {
   }
 
   /**
-   * Spotlight a mesh under the cursor (ctrl-hover pick preview) without
+   * Spotlight a mesh under the cursor (⌘-hover pick preview) without
    * ghosting the rest — `null` clears it. The framed inspection, if any,
    * always wins, so its meshes never get a redundant hover swap.
    */
@@ -171,14 +171,16 @@ class HighlightSystem implements System {
       ? new Set(model.getMeshesForTarget(hovered))
       : null
 
-    // for material/texture inspects only the matching primitives light up —
-    // other primitives of the same mesh stay untouched
+    // only material/texture inspects narrow which primitives light up; a mesh
+    // inspect — the common case — lights every primitive, so it needs no filter
+    const inspectFilter =
+      inspecting && inspecting.kind !== 'mesh' ? inspecting : null
     const matchesInspect = (material: Material) =>
-      !inspecting || inspecting.kind === 'mesh'
+      inspectFilter === null
         ? true
-        : inspecting.kind === 'material'
-          ? model.getMaterialId(material) === inspecting.id
-          : model.materialUsesTexture(material, inspecting.id)
+        : inspectFilter.kind === 'material'
+          ? model.getMaterialId(material) === inspectFilter.id
+          : model.materialUsesTexture(material, inspectFilter.id)
 
     // single pass over the whole model: every mesh starts from its true
     // original (restore ran first), so each captured `original` is genuine
