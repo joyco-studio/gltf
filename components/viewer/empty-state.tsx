@@ -154,7 +154,7 @@ function EmptyState() {
               className="flex cursor-pointer items-center justify-center gap-2 border-l bg-primary px-4 py-3.5 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <FileUp className="size-4" />
-              upload 3D file
+              Upload 3D file
             </button>
           </div>
         </div>
