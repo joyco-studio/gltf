@@ -37,6 +37,7 @@ function UrlParamLoader() {
     tab,
     setTab,
     setValidationSchema,
+    getValidationSchemaRevision,
     setValidationSchemaError,
   } = useViewer();
   const searchParams = useSearchParams();
@@ -54,7 +55,9 @@ function UrlParamLoader() {
     startedRef.current = true;
     const schemaUrl = searchParams.get("schemaUrl");
     if (schemaUrl) {
+      const schemaRevision = getValidationSchemaRevision();
       void fetchValidationSchema(schemaUrl).then((result) => {
+        if (getValidationSchemaRevision() !== schemaRevision) return;
         if (result.ok) setValidationSchema(result.schema, result.url);
         else setValidationSchemaError(result.error);
       });
@@ -76,6 +79,7 @@ function UrlParamLoader() {
     tab,
     openUrl,
     setValidationSchema,
+    getValidationSchemaRevision,
     setValidationSchemaError,
   ]);
 

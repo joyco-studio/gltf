@@ -54,6 +54,7 @@ interface ViewerContextValue {
     schema: GltfValidationSchema | null,
     sourceUrl?: string
   ) => void
+  getValidationSchemaRevision: () => number
   setValidationSchemaError: React.Dispatch<React.SetStateAction<string | null>>
 }
 
@@ -81,6 +82,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [validationSchema, setValidationSchemaState] =
     React.useState<GltfValidationSchema | null>(null)
+  const validationSchemaRevisionRef = React.useRef(0)
   const [validationSchemaError, setValidationSchemaError] =
     React.useState<string | null>(null)
   // source URL of the active model, or null when loaded from local files —
@@ -118,6 +120,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
 
   const setValidationSchema = React.useCallback(
     (schema: GltfValidationSchema | null, sourceUrl?: string) => {
+      validationSchemaRevisionRef.current += 1
       setValidationSchemaState(schema)
       setValidationSchemaError(null)
 
@@ -131,6 +134,10 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
         query ? `?${query}` : window.location.pathname
       )
     },
+    []
+  )
+  const getValidationSchemaRevision = React.useCallback(
+    () => validationSchemaRevisionRef.current,
     []
   )
 
@@ -244,6 +251,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       validationSchema,
       validationSchemaError,
       setValidationSchema,
+      getValidationSchemaRevision,
       setValidationSchemaError,
     }),
     [
@@ -263,6 +271,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       validationSchema,
       validationSchemaError,
       setValidationSchema,
+      getValidationSchemaRevision,
     ]
   )
 
