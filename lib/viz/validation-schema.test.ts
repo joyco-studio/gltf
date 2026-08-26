@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import { validateGltf } from './validate'
+import { createGltfValidationJsonSchema } from './validation-schema-definition'
 import {
   EXAMPLE_VALIDATION_SCHEMA,
   parseGltfValidationSchema,
@@ -16,8 +18,35 @@ function schema(
 }
 
 describe('parseGltfValidationSchema', () => {
+  it('keeps the published JSON Schema generated from Zod', () => {
+    const published = JSON.parse(
+      readFileSync(
+        new URL('../../public/validation-schema.json', import.meta.url),
+        'utf8'
+      )
+    )
+
+    assert.deepEqual(published, createGltfValidationJsonSchema())
+  })
+
   it('accepts the portable example schema', () => {
     const parsed = parseGltfValidationSchema(EXAMPLE_VALIDATION_SCHEMA)
+
+    assert.equal(parsed.ok, true)
+    if (parsed.ok) assert.equal(parsed.schema.rules[0].level, 'error')
+  })
+
+  it('normalizes an omitted level to error', () => {
+    const parsed = parseGltfValidationSchema({
+      version: 1,
+      rules: [
+        {
+          id: 'unique-mesh-names',
+          path: '$.meshes[*].name',
+          operator: 'unique',
+        },
+      ],
+    })
 
     assert.equal(parsed.ok, true)
     if (parsed.ok) assert.equal(parsed.schema.rules[0].level, 'error')

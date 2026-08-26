@@ -1,114 +1,316 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gltf.joyco.studio/validation-schema.json",
-  "title": "glTF custom validation schema",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["version", "rules"],
   "properties": {
-    "$schema": { "type": "string", "format": "uri" },
-    "version": { "const": 1 },
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
+    "version": {
+      "type": "number",
+      "const": 1
+    },
     "rules": {
       "type": "array",
-      "items": { "$ref": "#/$defs/rule" }
-    }
-  },
-  "$defs": {
-    "rule": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "path", "operator"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "path": {
-          "type": "string",
-          "description": "RFC 9535 JSONPath expression.",
-          "pattern": "^\\$"
-        },
-        "operator": {
-          "enum": [
-            "exists",
-            "count",
-            "includesAll",
-            "includesAny",
-            "unique",
-            "equals",
-            "notEquals",
-            "matches",
-            "lessThan",
-            "lessThanOrEqual",
-            "greaterThan",
-            "greaterThanOrEqual"
-          ]
-        },
-        "value": true,
-        "flags": {
-          "type": "string",
-          "pattern": "^[imsu]*$",
-          "maxLength": 4,
-          "description": "Linear-time regular expression flags: case-insensitive (i), multiline (m), dot-all (s), and Unicode (u)."
-        },
-        "level": { "enum": ["error", "warning"], "default": "error" },
-        "title": { "type": "string" },
-        "message": { "type": "string" }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "operator": { "const": "unique" } } },
-          "then": { "not": { "required": ["value"] } },
-          "else": { "required": ["value"] }
-        },
-        {
-          "if": { "properties": { "operator": { "const": "exists" } } },
-          "then": { "properties": { "value": { "type": "boolean" } } }
-        },
-        {
-          "if": { "properties": { "operator": { "const": "count" } } },
-          "then": {
-            "properties": { "value": { "type": "integer", "minimum": 0 } }
-          }
-        },
-        {
-          "if": {
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
             "properties": {
-              "operator": { "enum": ["includesAll", "includesAny"] }
-            }
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "const": "exists"
+              },
+              "value": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
           },
-          "then": {
+          {
+            "type": "object",
             "properties": {
-              "value": { "type": "array", "minItems": 1 }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "operator": { "const": "matches" } } },
-          "then": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "const": "count"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
             "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "includesAll",
+                  "includesAny"
+                ]
+              },
+              "value": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/__schema5"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "const": "unique"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "equals",
+                  "notEquals"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "const": "matches"
+              },
               "value": {
                 "type": "string",
                 "maxLength": 256,
                 "description": "A linear-time RE2-compatible regular expression."
+              },
+              "flags": {
+                "description": "Linear-time regular expression flags: case-insensitive (i), multiline (m), dot-all (s), and Unicode (u).",
+                "$ref": "#/$defs/__schema6"
               }
-            }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
           },
-          "else": { "not": { "required": ["flags"] } }
-        },
-        {
-          "if": {
+          {
+            "type": "object",
             "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
               "operator": {
+                "type": "string",
                 "enum": [
                   "lessThan",
                   "lessThanOrEqual",
                   "greaterThan",
                   "greaterThanOrEqual"
                 ]
+              },
+              "value": {
+                "type": "number"
               }
-            }
-          },
-          "then": { "properties": { "value": { "type": "number" } } }
-        }
-      ]
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
     }
-  }
+  },
+  "required": [
+    "version",
+    "rules"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "__schema1": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\$.*",
+      "description": "RFC 9535 JSONPath expression."
+    },
+    "__schema2": {
+      "default": "error",
+      "type": "string",
+      "enum": [
+        "error",
+        "warning"
+      ]
+    },
+    "__schema3": {
+      "type": "string"
+    },
+    "__schema4": {
+      "type": "string"
+    },
+    "__schema5": {},
+    "__schema6": {
+      "type": "string",
+      "maxLength": 4,
+      "pattern": "^[imsu]*$"
+    }
+  },
+  "$id": "https://gltf.joyco.studio/validation-schema.json",
+  "title": "glTF custom validation schema"
 }

@@ -2,15 +2,19 @@ import { exec, type JsonValue, type Path } from 'jsonpath-rfc9535'
 import parseJsonPath from 'jsonpath-rfc9535/parser'
 import { RE2JS } from 're2js'
 
+import {
+  GltfValidationSchemaDefinition,
+  MAX_REGEX_LENGTH,
+  VALIDATION_SCHEMA_VERSION,
+  type GltfValidationRule,
+  type GltfValidationSchema,
+} from './validation-schema-definition'
 import type {
   GltfValidationReference,
   GltfValidationResult,
-  GltfValidationType,
 } from './validate'
 
-const VALIDATION_SCHEMA_VERSION = 1 as const
 const MAX_REPORTED_VALUES = 5
-const MAX_REGEX_LENGTH = 256
 const REGEX_FLAGS = {
   i: RE2JS.CASE_INSENSITIVE,
   m: RE2JS.MULTILINE,
@@ -18,43 +22,10 @@ const REGEX_FLAGS = {
   u: 0,
 } as const
 
-const OPERATORS = [
-  'exists',
-  'count',
-  'includesAll',
-  'includesAny',
-  'unique',
-  'equals',
-  'notEquals',
-  'matches',
-  'lessThan',
-  'lessThanOrEqual',
-  'greaterThan',
-  'greaterThanOrEqual',
-] as const
-
-type ValidationOperator = (typeof OPERATORS)[number]
-
-interface GltfValidationRule {
-  id: string
-  path: string
-  operator: ValidationOperator
-  value?: unknown
-  flags?: string
-  level: GltfValidationType
-  title?: string
-  message?: string
-}
-
-interface GltfValidationSchema {
-  $schema?: string
-  version: typeof VALIDATION_SCHEMA_VERSION
-  rules: GltfValidationRule[]
-}
-
 type ParseValidationSchemaResult =
   | { ok: true; schema: GltfValidationSchema }
   | { ok: false; errors: string[] }
+type ValidationOperator = GltfValidationRule['operator']
 
 interface ResolvedValue {
   value: unknown
@@ -74,39 +45,6 @@ const REFERENCE_KINDS = {
   animations: 'animation',
 } as const
 
-const VALUE_OPERATORS = new Set<ValidationOperator>([
-  'exists',
-  'count',
-  'includesAll',
-  'includesAny',
-  'equals',
-  'notEquals',
-  'matches',
-  'lessThan',
-  'lessThanOrEqual',
-  'greaterThan',
-  'greaterThanOrEqual',
-])
-
-const NUMBER_OPERATORS = new Set<ValidationOperator>([
-  'lessThan',
-  'lessThanOrEqual',
-  'greaterThan',
-  'greaterThanOrEqual',
-])
-
-const SCHEMA_KEYS = new Set(['$schema', 'version', 'rules'])
-const RULE_KEYS = new Set([
-  'id',
-  'path',
-  'operator',
-  'value',
-  'flags',
-  'level',
-  'title',
-  'message',
-])
-
 const EXAMPLE_VALIDATION_SCHEMA: GltfValidationSchema = {
   $schema: 'https://gltf.joyco.studio/validation-schema.json',
   version: 1,
@@ -125,10 +63,6 @@ const EXAMPLE_VALIDATION_SCHEMA: GltfValidationSchema = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function hasOwn(record: Record<string, unknown>, key: string) {
-  return Object.prototype.hasOwnProperty.call(record, key)
 }
 
 function formatValue(value: unknown): string {
@@ -214,155 +148,80 @@ function resolvePath(source: unknown, path: string): ResolvedValue[] {
   return resolved
 }
 
-function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult {
-  if (!isRecord(source)) {
-    return { ok: false, errors: ['Expected the validation schema to be a JSON object.'] }
+function sentence(message: string) {
+  return /[.!?]$/.test(message) ? message : `${message}.`
+}
+
+function formatSchemaIssue(issue: {
+  path: PropertyKey[]
+  message: string
+}) {
+  const [root, index, ...rest] = issue.path
+  if (root === 'rules' && typeof index === 'number') {
+    const property = rest.length > 0 ? ` “${rest.join('.')}”` : ''
+    return `Rule ${index + 1}${property}: ${sentence(issue.message)}`
   }
+  const property = issue.path.length > 0 ? `“${issue.path.join('.')}”: ` : ''
+  return `${property}${sentence(issue.message)}`
+}
+
+function collectSemanticErrors(source: unknown) {
+  if (!isRecord(source) || !Array.isArray(source.rules)) return []
 
   const errors: string[] = []
-  Object.keys(source).forEach((key) => {
-    if (!SCHEMA_KEYS.has(key)) errors.push(`Unsupported schema property “${key}”.`)
-  })
-  if (source.$schema !== undefined && typeof source.$schema !== 'string') {
-    errors.push('Expected “$schema” to be a string when present.')
-  }
-  if (source.version !== VALIDATION_SCHEMA_VERSION) {
-    errors.push(`Expected “version” to be ${VALIDATION_SCHEMA_VERSION}.`)
-  }
-  if (!Array.isArray(source.rules)) {
-    errors.push('Expected “rules” to be an array.')
-    return { ok: false, errors }
-  }
-
-  const rules: GltfValidationRule[] = []
   const ids = new Set<string>()
-
   source.rules.forEach((candidate, index) => {
+    if (!isRecord(candidate)) return
     const prefix = `Rule ${index + 1}`
-    if (!isRecord(candidate)) {
-      errors.push(`${prefix} must be an object.`)
-      return
-    }
 
-    Object.keys(candidate).forEach((key) => {
-      if (!RULE_KEYS.has(key)) errors.push(`${prefix} has unsupported property “${key}”.`)
-    })
-
-    const id = candidate.id
-    const path = candidate.path
-    const operator = candidate.operator
-    const level = candidate.level ?? 'error'
-
-    if (typeof id !== 'string' || !id.trim()) {
-      errors.push(`${prefix} must have a non-empty string “id”.`)
-    } else if (ids.has(id)) {
-      errors.push(`${prefix} repeats the id “${id}”.`)
-    } else {
+    if (typeof candidate.id === 'string' && candidate.id.trim()) {
+      const id = candidate.id.trim()
+      if (ids.has(id)) errors.push(`${prefix} repeats the id “${id}”.`)
       ids.add(id)
     }
 
-    if (typeof path !== 'string' || !isValidJsonPath(path)) {
+    if (
+      typeof candidate.path === 'string' &&
+      candidate.path.startsWith('$') &&
+      !isValidJsonPath(candidate.path)
+    ) {
       errors.push(`${prefix} must have a valid RFC 9535 JSONPath “path”.`)
     }
 
-    if (typeof operator !== 'string' || !(OPERATORS as readonly string[]).includes(operator)) {
-      errors.push(`${prefix} has an unsupported “operator”.`)
-    }
-
-    if (level !== 'error' && level !== 'warning') {
-      errors.push(`${prefix} “level” must be “error” or “warning”.`)
-    }
-    if (candidate.title !== undefined && typeof candidate.title !== 'string') {
-      errors.push(`${prefix} “title” must be a string when present.`)
-    }
-    if (candidate.message !== undefined && typeof candidate.message !== 'string') {
-      errors.push(`${prefix} “message” must be a string when present.`)
-    }
-
-    if (typeof operator === 'string' && (OPERATORS as readonly string[]).includes(operator)) {
-      const typedOperator = operator as ValidationOperator
-      if (VALUE_OPERATORS.has(typedOperator) && !hasOwn(candidate, 'value')) {
-        errors.push(`${prefix} operator “${operator}” requires “value”.`)
-      }
-      if (typedOperator === 'unique' && hasOwn(candidate, 'value')) {
-        errors.push(`${prefix} operator “unique” does not accept “value”.`)
-      }
-      if (typedOperator === 'exists' && typeof candidate.value !== 'boolean') {
-        errors.push(`${prefix} operator “exists” requires a boolean “value”.`)
-      }
-      if (
-        typedOperator === 'count' &&
-        (!Number.isInteger(candidate.value) || (candidate.value as number) < 0)
-      ) {
-        errors.push(`${prefix} operator “count” requires a non-negative integer “value”.`)
-      }
-      if (
-        (typedOperator === 'includesAll' || typedOperator === 'includesAny') &&
-        (!Array.isArray(candidate.value) || candidate.value.length === 0)
-      ) {
-        errors.push(`${prefix} operator “${operator}” requires a non-empty array “value”.`)
-      }
-      if (NUMBER_OPERATORS.has(typedOperator) && typeof candidate.value !== 'number') {
-        errors.push(`${prefix} operator “${operator}” requires a number “value”.`)
-      }
-      if (typedOperator === 'matches') {
-        if (typeof candidate.value !== 'string') {
-          errors.push(`${prefix} operator “matches” requires a string “value”.`)
-        } else {
-          try {
-            compileRegex(
-              candidate.value,
-              typeof candidate.flags === 'string' ? candidate.flags : ''
-            )
-          } catch (error) {
-            errors.push(
-              `${prefix} operator “matches” contains an unsupported regular expression: ${error instanceof Error ? error.message : String(error)}.`
-            )
-          }
-        }
-        if (candidate.flags !== undefined && typeof candidate.flags !== 'string') {
-          errors.push(`${prefix} “flags” must be a string when present.`)
-        }
-      } else if (candidate.flags !== undefined) {
-        errors.push(`${prefix} “flags” is only supported by the “matches” operator.`)
-      }
-    }
-
     if (
-      typeof id === 'string' &&
-      typeof path === 'string' &&
-      typeof operator === 'string' &&
-      (OPERATORS as readonly string[]).includes(operator) &&
-      (level === 'error' || level === 'warning')
+      candidate.operator === 'matches' &&
+      typeof candidate.value === 'string' &&
+      candidate.value.length <= MAX_REGEX_LENGTH &&
+      (candidate.flags === undefined ||
+        (typeof candidate.flags === 'string' && /^[imsu]*$/.test(candidate.flags)))
     ) {
-      rules.push({
-        id,
-        path,
-        operator: operator as ValidationOperator,
-        ...(hasOwn(candidate, 'value') && { value: candidate.value }),
-        ...(typeof candidate.flags === 'string' && { flags: candidate.flags }),
-        level,
-        ...(typeof candidate.title === 'string' && { title: candidate.title }),
-        ...(typeof candidate.message === 'string' && { message: candidate.message }),
-      })
+      try {
+        compileRegex(candidate.value, candidate.flags as string | undefined)
+      } catch (error) {
+        errors.push(
+          `${prefix} operator “matches” contains an unsupported regular expression: ${error instanceof Error ? error.message : String(error)}.`
+        )
+      }
     }
   })
+  return errors
+}
 
-  return errors.length > 0
-    ? { ok: false, errors }
-    : {
-        ok: true,
-        schema: {
-          ...(typeof source.$schema === 'string' && { $schema: source.$schema }),
-          version: VALIDATION_SCHEMA_VERSION,
-          rules,
-        },
-      }
+function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult {
+  const parsed = GltfValidationSchemaDefinition.safeParse(source)
+  const structuralErrors = parsed.success
+    ? []
+    : parsed.error.issues.map(formatSchemaIssue)
+  const errors = [...structuralErrors, ...collectSemanticErrors(source)]
+
+  return parsed.success && errors.length === 0
+    ? { ok: true, schema: parsed.data }
+    : { ok: false, errors }
 }
 
 function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleFailure | null {
   const values = matches.map(({ value }) => value)
-  const expected = rule.value
+  const expected = 'value' in rule ? rule.value : undefined
 
   switch (rule.operator) {
     case 'exists': {

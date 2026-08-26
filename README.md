@@ -155,3 +155,7 @@ Remote GLBs use the existing URL envelope with an added schema:
 
 The schema's own JSON Schema is published at
 [`/validation-schema.json`](https://gltf.joyco.studio/validation-schema.json).
+It is generated from the Zod definition that also provides runtime parsing and
+TypeScript types. After changing that definition, run
+`pnpm generate:validation-schema`; tests and `pnpm build` reject a stale public
+file.
