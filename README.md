@@ -42,6 +42,21 @@ curl -X POST https://gltf.joyco.studio/api/validate \
   --data-binary @model.glb
 ```
 
+For GLBs larger than the hosting platform's request limit, send an HTTPS URL
+to the object instead. The validator fetches only the GLB header and structured
+JSON chunk, so embedded textures and binary buffers are not downloaded:
+
+```sh
+curl -X POST https://gltf.joyco.studio/api/validate \
+  -H 'Content-Type: application/json' \
+  --data '{"url":"https://r2.joyco.studio/models/model.glb"}'
+```
+
+Remote validation allows `r2.joyco.studio`, `*.r2.dev`, and
+`*.r2.cloudflarestorage.com` by default. Set the comma-separated
+`GLTF_VALIDATION_REMOTE_HOSTS` environment variable to use other R2 custom
+domains. Wildcard entries such as `*.example.com` are supported.
+
 The endpoint returns a JSON array. The browser inspector calls the same
 environment-neutral validator, so both surfaces share one result contract and
 one source of validation rules:
@@ -56,6 +71,6 @@ one source of validation rules:
 ]
 ```
 
-Valid documents without findings return `[]`. Malformed requests return the
-same result shape with an HTTP `400` or `415` status. The viewer itself remains
-client-side and does not call this API or upload models.
+Valid documents without findings return `[]`. Request and remote-fetch failures
+return the same result shape with an appropriate non-2xx status. The viewer
+itself remains client-side and does not call this API or upload models.

@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict'
+import { afterEach, describe, it } from 'node:test'
+
+import { fetchGlbJson } from './fetch-glb-json'
+
+const GLB_LENGTH = 15 * 1024 * 1024
+const originalFetch = globalThis.fetch
+const originalAllowedHosts = process.env.GLTF_VALIDATION_REMOTE_HOSTS
+
+function remoteGlbParts(json: unknown) {
+  const source = new TextEncoder().encode(JSON.stringify(json))
+  const jsonLength = (source.length + 3) & ~3
+  const header = new ArrayBuffer(20)
+  const view = new DataView(header)
+  view.setUint32(0, 0x46546c67, true)
+  view.setUint32(4, 2, true)
+  view.setUint32(8, GLB_LENGTH, true)
+  view.setUint32(12, jsonLength, true)
+  view.setUint32(16, 0x4e4f534a, true)
+
+  const jsonBytes = new Uint8Array(jsonLength).fill(0x20)
+  jsonBytes.set(source)
+  return { header, jsonBytes }
+}
+
+function rangeResponse(
+  bytes: ArrayBuffer | Uint8Array<ArrayBuffer>,
+  start: number
+) {
+  const length = bytes.byteLength
+  return new Response(bytes, {
+    status: 206,
+    headers: {
+      'Content-Range': `bytes ${start}-${start + length - 1}/${GLB_LENGTH}`,
+    },
+  })
+}
+
+describe('fetchGlbJson', () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    if (originalAllowedHosts === undefined) {
+      delete process.env.GLTF_VALIDATION_REMOTE_HOSTS
+    } else {
+      process.env.GLTF_VALIDATION_REMOTE_HOSTS = originalAllowedHosts
+    }
+  })
+
+  it('reads only the header and JSON chunk from a large R2 GLB', async () => {
+    process.env.GLTF_VALIDATION_REMOTE_HOSTS = 'models.example.com'
+    const document = {
+      asset: { version: '2.0' },
+      nodes: [{ name: 'Duplicate' }, { name: 'Duplicate' }],
+    }
+    const { header, jsonBytes } = remoteGlbParts(document)
+    const responses = [rangeResponse(header, 0), rangeResponse(jsonBytes, 20)]
+    const headers: HeadersInit[] = []
+    globalThis.fetch = (async (_input, init) => {
+      headers.push(init?.headers ?? {})
+      const response = responses.shift()
+      assert(response)
+      return response
+    }) as typeof fetch
+
+    const result = await fetchGlbJson(
+      'https://models.example.com/model.glb'
+    )
+
+    assert.deepEqual(result, { ok: true, json: document })
+    assert.deepEqual(headers, [
+      { 'Accept-Encoding': 'identity', Range: 'bytes=0-19' },
+      {
+        'Accept-Encoding': 'identity',
+        Range: `bytes=20-${19 + jsonBytes.byteLength}`,
+      },
+    ])
+    assert.equal(responses.length, 0)
+  })
+
+  it('rejects hosts outside the R2 allowlist before fetching', async () => {
+    process.env.GLTF_VALIDATION_REMOTE_HOSTS = 'r2.joyco.studio'
+    let fetched = false
+    globalThis.fetch = (async () => {
+      fetched = true
+      throw new Error('Unexpected fetch')
+    }) as typeof fetch
+
+    const result = await fetchGlbJson('https://example.com/model.glb')
+
+    assert.deepEqual(result, {
+      ok: false,
+      title: 'Remote GLB host is not allowed',
+      description:
+        'Configure GLTF_VALIDATION_REMOTE_HOSTS to allow this R2 hostname.',
+      status: 403,
+    })
+    assert.equal(fetched, false)
+  })
+})
