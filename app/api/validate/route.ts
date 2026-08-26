@@ -1,3 +1,4 @@
+import { fetchGlbJson } from '@/lib/viz/fetch-glb-json'
 import { parseGlbJson } from '@/lib/viz/parse-glb'
 import { validateGltf, type GltfValidationResult } from '@/lib/viz/validate'
 
@@ -13,6 +14,39 @@ function json(results: GltfValidationResult[], status = 200) {
 
 function requestError(title: string, description: string, status = 400) {
   return json([{ type: 'error', title, description }], status)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function validateJsonRequest(request: Request) {
+  let source: unknown
+
+  try {
+    source = await request.json()
+  } catch {
+    return requestError(
+      'Invalid JSON request body',
+      'Expected the request body to contain a valid glTF JSON document or remote GLB URL.'
+    )
+  }
+
+  if (isRecord(source) && 'url' in source) {
+    if (typeof source.url !== 'string' || !source.url) {
+      return requestError(
+        'Invalid remote GLB URL',
+        'Expected “url” to contain an absolute HTTPS URL.'
+      )
+    }
+
+    const remote = await fetchGlbJson(source.url)
+    return remote.ok
+      ? json(validateGltf(remote.json))
+      : requestError(remote.title, remote.description, remote.status)
+  }
+
+  return json(validateGltf(source))
 }
 
 export async function POST(request: Request) {
@@ -37,12 +71,5 @@ export async function POST(request: Request) {
     )
   }
 
-  try {
-    return json(validateGltf(await request.json()))
-  } catch {
-    return requestError(
-      'Invalid JSON request body',
-      'Expected the request body to contain a valid glTF JSON document.'
-    )
-  }
+  return validateJsonRequest(request)
 }

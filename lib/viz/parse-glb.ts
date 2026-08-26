@@ -8,47 +8,66 @@ type ParseGlbResult =
   | { ok: true; json: unknown }
   | { ok: false; error: string }
 
+type ParseGlbHeaderResult =
+  | { ok: true; byteLength: number; jsonLength: number }
+  | { ok: false; error: string }
+
 function invalid(error: string): ParseGlbResult {
   return { ok: false, error }
 }
 
-/** Extracts and parses the structured JSON chunk from a GLB 2.0 container. */
-function parseGlbJson(buffer: ArrayBuffer): ParseGlbResult {
+function invalidHeader(error: string): ParseGlbHeaderResult {
+  return { ok: false, error }
+}
+
+/** Reads the GLB 2.0 header and first chunk header without needing the BIN data. */
+function parseGlbHeader(buffer: ArrayBuffer): ParseGlbHeaderResult {
   if (buffer.byteLength < HEADER_LENGTH + CHUNK_HEADER_LENGTH) {
-    return invalid('The GLB is too short to contain a header and JSON chunk.')
+    return invalidHeader(
+      'The GLB is too short to contain a header and JSON chunk.'
+    )
   }
 
   const view = new DataView(buffer)
   if (view.getUint32(0, true) !== GLB_MAGIC) {
-    return invalid('The payload does not have a valid glTF binary header.')
+    return invalidHeader(
+      'The payload does not have a valid glTF binary header.'
+    )
   }
 
   if (view.getUint32(4, true) !== GLB_VERSION) {
-    return invalid('Only GLB container version 2 is supported.')
+    return invalidHeader('Only GLB container version 2 is supported.')
   }
 
-  if (view.getUint32(8, true) !== buffer.byteLength) {
-    return invalid('The GLB header length does not match the payload length.')
-  }
+  const byteLength = view.getUint32(8, true)
 
   const jsonLength = view.getUint32(HEADER_LENGTH, true)
   const jsonType = view.getUint32(HEADER_LENGTH + 4, true)
   if (jsonType !== JSON_CHUNK_TYPE) {
-    return invalid('The first GLB chunk is not structured JSON content.')
+    return invalidHeader(
+      'The first GLB chunk is not structured JSON content.'
+    )
   }
 
   if (jsonLength % 4 !== 0) {
-    return invalid('The GLB JSON chunk is not aligned to a 4-byte boundary.')
+    return invalidHeader(
+      'The GLB JSON chunk is not aligned to a 4-byte boundary.'
+    )
   }
 
   const jsonStart = HEADER_LENGTH + CHUNK_HEADER_LENGTH
-  if (jsonStart + jsonLength > buffer.byteLength) {
-    return invalid('The GLB JSON chunk extends beyond the payload length.')
+  if (jsonStart + jsonLength > byteLength) {
+    return invalidHeader(
+      'The GLB JSON chunk extends beyond the payload length.'
+    )
   }
 
-  const jsonText = new TextDecoder().decode(
-    new Uint8Array(buffer, jsonStart, jsonLength)
-  )
+  return { ok: true, byteLength, jsonLength }
+}
+
+/** Parses the raw structured JSON bytes from a GLB 2.0 container. */
+function parseGlbJsonChunk(buffer: ArrayBuffer): ParseGlbResult {
+  const jsonText = new TextDecoder().decode(buffer)
 
   try {
     return { ok: true, json: JSON.parse(jsonText.trimEnd()) }
@@ -57,5 +76,18 @@ function parseGlbJson(buffer: ArrayBuffer): ParseGlbResult {
   }
 }
 
-export { parseGlbJson }
-export type { ParseGlbResult }
+/** Extracts and parses the structured JSON chunk from a complete GLB. */
+function parseGlbJson(buffer: ArrayBuffer): ParseGlbResult {
+  const header = parseGlbHeader(buffer)
+  if (!header.ok) return header
+
+  if (header.byteLength !== buffer.byteLength) {
+    return invalid('The GLB header length does not match the payload length.')
+  }
+
+  const jsonStart = HEADER_LENGTH + CHUNK_HEADER_LENGTH
+  return parseGlbJsonChunk(buffer.slice(jsonStart, jsonStart + header.jsonLength))
+}
+
+export { parseGlbHeader, parseGlbJson, parseGlbJsonChunk }
+export type { ParseGlbHeaderResult, ParseGlbResult }
