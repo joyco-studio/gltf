@@ -1,65 +1,65 @@
 import { Badge } from '@/components/ui/badge'
 import type {
-  GltfValidationIssue,
-  GltfValidationTier,
+  GltfValidationResult,
+  GltfValidationType,
 } from '@/lib/viz/validate'
 
-const TIER_LABELS: Record<GltfValidationTier, string> = {
+const TYPE_LABELS: Record<GltfValidationType, string> = {
   error: 'Errors',
   warning: 'Warnings',
 }
 
 function ValidationSection({
-  tier,
-  issues,
+  type,
+  results,
 }: {
-  tier: GltfValidationTier
-  issues: GltfValidationIssue[]
+  type: GltfValidationType
+  results: GltfValidationResult[]
 }) {
   return (
     <section>
       <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2">
         <h2 className="font-heading text-sm font-semibold uppercase tracking-wide">
-          {TIER_LABELS[tier]}
+          {TYPE_LABELS[type]}
         </h2>
-        <Badge variant={tier === 'error' ? 'destructive' : 'muted'} size="sm">
-          {issues.length}
+        <Badge variant={type === 'error' ? 'destructive' : 'muted'} size="sm">
+          {results.length}
         </Badge>
       </div>
 
-      {issues.length > 0 ? (
+      {results.length > 0 ? (
         <ul>
-          {issues.map((issue, index) => (
+          {results.map((result, index) => (
             <li
-              key={`${issue.tier}-${issue.title}-${index}`}
+              key={`${result.type}-${result.title}-${index}`}
               className="border-b px-4 py-3 last:border-b-0"
             >
               <h3 className="text-sm font-medium text-foreground">
-                {issue.title}
+                {result.title}
               </h3>
               <p className="mt-1 max-w-prose text-sm leading-5 text-muted-foreground">
-                {issue.description}
+                {result.description}
               </p>
             </li>
           ))}
         </ul>
       ) : (
         <p className="border-b px-4 py-3 font-mono text-xs text-muted-foreground">
-          No {TIER_LABELS[tier].toLowerCase()} found.
+          No {TYPE_LABELS[type].toLowerCase()} found.
         </p>
       )}
     </section>
   )
 }
 
-function ValidationList({ issues }: { issues: GltfValidationIssue[] }) {
-  const errors = issues.filter((issue) => issue.tier === 'error')
-  const warnings = issues.filter((issue) => issue.tier === 'warning')
+function ValidationList({ issues }: { issues: GltfValidationResult[] }) {
+  const errors = issues.filter((result) => result.type === 'error')
+  const warnings = issues.filter((result) => result.type === 'warning')
 
   return (
     <div>
-      <ValidationSection tier="error" issues={errors} />
-      <ValidationSection tier="warning" issues={warnings} />
+      <ValidationSection type="error" results={errors} />
+      <ValidationSection type="warning" results={warnings} />
     </div>
   )
 }

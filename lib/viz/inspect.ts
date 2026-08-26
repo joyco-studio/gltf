@@ -1,7 +1,7 @@
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import type { Texture } from 'three/webgpu'
 
-import { validateGltf, type GltfValidationIssue } from './validate'
+import { validateGltf, type GltfValidationResult } from './validate'
 
 /**
  * Normalized, UI-friendly snapshot of a glTF document. Built once per load
@@ -92,7 +92,7 @@ interface GltfDocumentInfo {
   materials: GltfMaterialInfo[]
   textures: GltfTextureInfo[]
   animations: GltfAnimationInfo[]
-  validationIssues: GltfValidationIssue[]
+  validationIssues: GltfValidationResult[]
 }
 
 /* ------------------------------- glTF JSON ------------------------------- */
