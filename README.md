@@ -34,6 +34,14 @@ curl -X POST https://gltf.joyco.studio/api/validate \
   --data-binary @model.gltf
 ```
 
+Binary `.glb` documents use the same endpoint:
+
+```sh
+curl -X POST https://gltf.joyco.studio/api/validate \
+  -H 'Content-Type: model/gltf-binary' \
+  --data-binary @model.glb
+```
+
 The endpoint returns a JSON array. The browser inspector calls the same
 environment-neutral validator, so both surfaces share one result contract and
 one source of validation rules:
@@ -50,5 +58,4 @@ one source of validation rules:
 
 Valid documents without findings return `[]`. Malformed requests return the
 same result shape with an HTTP `400` or `415` status. The viewer itself remains
-client-side and does not call this API or upload models. This first endpoint
-accepts JSON `.gltf` documents, not binary `.glb` payloads.
+client-side and does not call this API or upload models.
