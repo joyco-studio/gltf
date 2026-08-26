@@ -6,6 +6,8 @@ import { AxesSystem } from './systems/axes-system'
 import { EventEmitter } from './event-emitter'
 import { inspectGltf, type GltfDocumentInfo } from './inspect'
 import type { System } from './system'
+import { validateGltf } from './validate'
+import type { GltfValidationSchema } from './validation-schema'
 import { BoundsSystem } from './systems/bounds-system'
 import { CameraSystem } from './systems/camera-system'
 import { EnvironmentSystem } from './systems/environment-system'
@@ -63,6 +65,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
   private frameHandle: number | null = null
   private resizeObserver: ResizeObserver
   private snapshot: ViewerSnapshot = EMPTY_SNAPSHOT
+  private validationSchema: GltfValidationSchema | null = null
+  private validationSource: unknown = null
 
   constructor(canvas: HTMLCanvasElement) {
     super()
@@ -160,13 +164,30 @@ class Viewer extends EventEmitter<ViewerEvents> {
     await this.load(() => this.model.loadUrl(url, transform))
   }
 
+  /** Applies one portable rule schema to the current and all future models. */
+  setValidationSchema(schema: GltfValidationSchema | null) {
+    this.validationSchema = schema
+    if (!this.validationSource || !this.snapshot.document) return
+    this.setSnapshot({
+      document: {
+        ...this.snapshot.document,
+        validationIssues: validateGltf(this.validationSource, schema),
+      },
+    })
+  }
+
   private async load(loadModel: () => Promise<LoadedModel | null>) {
     this.setSnapshot({ status: 'loading', error: null })
     try {
       const loaded = await loadModel()
       if (!loaded) return // superseded by a newer load
 
+      const source = loaded.gltf.parser.json as unknown
       const document = await inspectGltf(loaded.gltf, loaded.fileName)
+      // The schema may have changed while texture inspection was awaiting;
+      // derive findings from the latest applied rules at commit time.
+      document.validationIssues = validateGltf(source, this.validationSchema)
+      this.validationSource = source
       this.setSnapshot({ status: 'ready', document })
     } catch (error) {
       this.setSnapshot({

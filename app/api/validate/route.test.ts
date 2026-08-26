@@ -81,3 +81,54 @@ describe('/api/validate CORS', () => {
     assertCorsHeaders(response)
   })
 })
+
+describe('/api/validate custom schemas', () => {
+  it('validates a wrapped glTF document with the supplied schema', async () => {
+    const response = await POST(
+      new Request('https://gltf.joyco.studio/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document: {
+            meshes: [{ name: 'Body' }, { name: 'Frame' }, { name: 'Glass' }],
+          },
+          schema: {
+            version: 1,
+            rules: [
+              {
+                id: 'required-code-meshes',
+                path: '$.meshes[*].name',
+                operator: 'includesAll',
+                value: ['Body', 'Frame', 'Glass', 'Screen'],
+                level: 'error',
+              },
+            ],
+          },
+        }),
+      })
+    )
+
+    assert.equal(response.status, 200)
+    const [result] = await response.json()
+    assert.equal(result.ruleId, 'required-code-meshes')
+    assert.match(result.description, /“Screen”/)
+  })
+
+  it('returns invalid schemas through the normal issue contract', async () => {
+    const response = await POST(
+      new Request('https://gltf.joyco.studio/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document: { asset: { version: '2.0' } },
+          schema: { version: 1, rules: [{ operator: 'nope' }] },
+        }),
+      })
+    )
+
+    assert.equal(response.status, 400)
+    const [result] = await response.json()
+    assert.equal(result.type, 'error')
+    assert.equal(result.title, 'Invalid validation schema')
+  })
+})
