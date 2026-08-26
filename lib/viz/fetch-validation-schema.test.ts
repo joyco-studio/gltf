@@ -18,7 +18,8 @@ describe('fetchValidationSchema', () => {
 
     assert.deepEqual(result, {
       ok: true,
-      text: '{"version":1,"rules":[]}',
+      schema: { version: 1, rules: [] },
+      url: 'https://schemas.example.com/gltf.json',
     })
     assert.equal(requests[0].input, 'https://schemas.example.com/gltf.json')
     assert.deepEqual(requests[0].init, {
@@ -69,5 +70,31 @@ describe('fetchValidationSchema', () => {
       error:
         'The schema could not be loaded. Check that the URL is reachable and allows cross-origin requests.',
     })
+  })
+
+  it('rejects malformed JSON responses', async () => {
+    const result = await fetchValidationSchema(
+      'https://schemas.example.com/invalid.json',
+      (async () => new Response('{')) as typeof fetch
+    )
+
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'The loaded schema is not valid JSON.',
+    })
+  })
+
+  it('rejects invalid validation schemas', async () => {
+    const result = await fetchValidationSchema(
+      'https://schemas.example.com/invalid-schema.json',
+      (async () =>
+        Response.json({
+          version: 1,
+          rules: [{ operator: 'nope' }],
+        })) as typeof fetch
+    )
+
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.match(result.error, /Rule 1 “operator”/)
   })
 })

@@ -1,5 +1,10 @@
+import {
+  parseGltfValidationSchema,
+  type GltfValidationSchema,
+} from './validation-schema'
+
 type FetchValidationSchemaResult =
-  | { ok: true; text: string }
+  | { ok: true; schema: GltfValidationSchema; url: string }
   | { ok: false; error: string }
 
 function parseSchemaUrl(source: string) {
@@ -36,7 +41,17 @@ async function fetchValidationSchema(
       }
     }
 
-    return { ok: true, text: await response.text() }
+    let source: unknown
+    try {
+      source = await response.json()
+    } catch {
+      return { ok: false, error: 'The loaded schema is not valid JSON.' }
+    }
+
+    const parsed = parseGltfValidationSchema(source)
+    return parsed.ok
+      ? { ok: true, schema: parsed.schema, url: url.href }
+      : { ok: false, error: parsed.errors.join(' ') }
   } catch {
     return {
       ok: false,

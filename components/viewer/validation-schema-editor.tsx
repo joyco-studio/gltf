@@ -43,7 +43,9 @@ function ValidationSchemaEditor() {
     setOpen(nextOpen)
     if (nextOpen) {
       setDraft(formatSchema(validationSchema ?? EXAMPLE_VALIDATION_SCHEMA))
-      setSchemaUrl('')
+      setSchemaUrl(
+        new URLSearchParams(window.location.search).get('schemaUrl') ?? ''
+      )
       setLoadingUrl(false)
       setError(null)
     }
@@ -89,11 +91,8 @@ function ValidationSchemaEditor() {
       return
     }
 
-    try {
-      applySource(JSON.parse(result.text))
-    } catch {
-      setError('The loaded schema is not valid JSON.')
-    }
+    setValidationSchema(result.schema, result.url)
+    setOpen(false)
   }
 
   return (
