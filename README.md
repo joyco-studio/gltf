@@ -5,7 +5,7 @@ its sibling `.bin` and texture files) and get a real-time viewport plus a
 browsable, searchable breakdown of everything inside the document — meshes,
 materials, textures, and animations.
 
-Everything runs client-side; no files are uploaded.
+The viewer runs client-side; no files are uploaded.
 
 **Live at [gltf.joyco.studio](https://gltf.joyco.studio/).**
 
@@ -23,3 +23,39 @@ Everything runs client-side; no files are uploaded.
   `gltf.joyco.studio/?url=https://example.com/model.glb&path=materials.mat_1`.
 - **Local & private** — files are resolved in the browser; nothing leaves the
   machine.
+
+## Validation API
+
+External services can validate a glTF JSON document without using the viewer:
+
+```sh
+curl -X POST https://gltf.joyco.studio/api/validate \
+  -H 'Content-Type: model/gltf+json' \
+  --data-binary @model.gltf
+```
+
+Binary `.glb` documents use the same endpoint:
+
+```sh
+curl -X POST https://gltf.joyco.studio/api/validate \
+  -H 'Content-Type: model/gltf-binary' \
+  --data-binary @model.glb
+```
+
+The endpoint returns a JSON array. The browser inspector calls the same
+environment-neutral validator, so both surfaces share one result contract and
+one source of validation rules:
+
+```json
+[
+  {
+    "type": "warning",
+    "title": "2 nodes share the name “Duplicate”",
+    "description": "Nodes #0, #1 use the same name. …"
+  }
+]
+```
+
+Valid documents without findings return `[]`. Malformed requests return the
+same result shape with an HTTP `400` or `415` status. The viewer itself remains
+client-side and does not call this API or upload models.

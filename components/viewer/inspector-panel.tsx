@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  ScrollAreaContent,
+  ScrollAreaViewport,
+} from "@/components/scroll-area";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -18,6 +22,7 @@ import { AnimationsTable } from "./animations-table";
 import { HierarchyTable } from "./hierarchy-table";
 import { MaterialsTable } from "./materials-table";
 import { TexturesGrid } from "./textures-grid";
+import { ValidationList } from "./validation-list";
 import { useViewer, type InspectorTab } from "./viewer-provider";
 
 function SectionTitle({
@@ -154,26 +159,39 @@ function InspectorPanel() {
         className="flex min-h-0 flex-1 flex-col"
       >
         {/* tight header: no padding, same h-8 rhythm as the app header */}
-        <div className="flex h-8 items-center justify-between border-b">
-          <TabsList className="h-8 gap-0">
-            <TabsTrigger value="contents" className="h-8">
-              Instances
-            </TabsTrigger>
-            <TabsTrigger value="textures" className="h-8">
-              Textures
-              <Badge variant="muted" size="sm">
-                {document.textures.length}
-              </Badge>
-            </TabsTrigger>
-            {document.animations.length > 0 ? (
-              <TabsTrigger value="animations" className="h-8">
-                Animations
-                <Badge variant="muted" size="sm">
-                  {document.animations.length}
-                </Badge>
-              </TabsTrigger>
-            ) : null}
-          </TabsList>
+        <div className="flex h-8 items-center border-b">
+          <ScrollAreaViewport
+            orientation="horizontal"
+            className="min-w-0 flex-1"
+          >
+            <ScrollAreaContent className="h-8">
+              <TabsList className="h-8 gap-0">
+                <TabsTrigger value="contents" className="h-8">
+                  Instances
+                </TabsTrigger>
+                <TabsTrigger value="textures" className="h-8">
+                  Textures
+                  <Badge variant="muted" size="sm">
+                    {document.textures.length}
+                  </Badge>
+                </TabsTrigger>
+                {document.animations.length > 0 ? (
+                  <TabsTrigger value="animations" className="h-8">
+                    Animations
+                    <Badge variant="muted" size="sm">
+                      {document.animations.length}
+                    </Badge>
+                  </TabsTrigger>
+                ) : null}
+                <TabsTrigger value="validation" className="h-8">
+                  Validation
+                  <Badge variant="muted" size="sm">
+                    {document.validationIssues.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </ScrollAreaContent>
+          </ScrollAreaViewport>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -213,6 +231,12 @@ function InspectorPanel() {
         <TabsContent value="animations" className="min-h-0">
           <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <AnimationsTable animations={document.animations} />
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="validation" className="min-h-0">
+          <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
+            <ValidationList issues={document.validationIssues} />
           </ScrollArea>
         </TabsContent>
       </Tabs>

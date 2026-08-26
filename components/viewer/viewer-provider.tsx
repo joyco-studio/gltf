@@ -12,7 +12,7 @@ import {
 import { EXAMPLE_MODEL } from './example-model'
 import { formatSharePath } from './share-path'
 
-type InspectorTab = 'contents' | 'textures' | 'animations'
+type InspectorTab = 'contents' | 'textures' | 'animations' | 'validation'
 
 interface Selection {
   kind: 'mesh' | 'material' | 'texture' | 'animation'
