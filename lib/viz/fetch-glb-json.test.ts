@@ -25,13 +25,15 @@ function remoteGlbParts(json: unknown) {
 
 function rangeResponse(
   bytes: ArrayBuffer | Uint8Array<ArrayBuffer>,
-  start: number
+  start: number,
+  etag: string
 ) {
   const length = bytes.byteLength
   return new Response(bytes, {
     status: 206,
     headers: {
       'Content-Range': `bytes ${start}-${start + length - 1}/${GLB_LENGTH}`,
+      ETag: etag,
     },
   })
 }
@@ -53,7 +55,10 @@ describe('fetchGlbJson', () => {
       nodes: [{ name: 'Duplicate' }, { name: 'Duplicate' }],
     }
     const { header, jsonBytes } = remoteGlbParts(document)
-    const responses = [rangeResponse(header, 0), rangeResponse(jsonBytes, 20)]
+    const responses = [
+      rangeResponse(header, 0, '"version-1"'),
+      rangeResponse(jsonBytes, 20, '"version-1"'),
+    ]
     const headers: HeadersInit[] = []
     globalThis.fetch = (async (_input, init) => {
       headers.push(init?.headers ?? {})
@@ -71,9 +76,66 @@ describe('fetchGlbJson', () => {
       { 'Accept-Encoding': 'identity', Range: 'bytes=0-19' },
       {
         'Accept-Encoding': 'identity',
+        'If-Range': '"version-1"',
         Range: `bytes=20-${19 + jsonBytes.byteLength}`,
       },
     ])
+    assert.equal(responses.length, 0)
+  })
+
+  it('rejects a same-length object replacement between ranges', async () => {
+    process.env.GLTF_VALIDATION_REMOTE_HOSTS = 'models.example.com'
+    const original = remoteGlbParts({
+      asset: { version: '2.0' },
+      nodes: [{ name: 'Old' }],
+    })
+    const replacement = remoteGlbParts({
+      asset: { version: '2.0' },
+      nodes: [{ name: 'New' }],
+    })
+    const responses = [
+      rangeResponse(original.header, 0, '"version-1"'),
+      rangeResponse(replacement.jsonBytes, 20, '"version-2"'),
+    ]
+    globalThis.fetch = (async () => {
+      const response = responses.shift()
+      assert(response)
+      return response
+    }) as typeof fetch
+
+    const result = await fetchGlbJson(
+      'https://models.example.com/model.glb'
+    )
+
+    assert.deepEqual(result, {
+      ok: false,
+      title: 'Remote GLB changed during validation',
+      description: 'Retry validation after the object has finished updating.',
+      status: 409,
+    })
+  })
+
+  it('requires a strong ETag before requesting the JSON chunk', async () => {
+    process.env.GLTF_VALIDATION_REMOTE_HOSTS = 'models.example.com'
+    const { header } = remoteGlbParts({ asset: { version: '2.0' } })
+    const responses = [rangeResponse(header, 0, 'W/"weak-version"')]
+    globalThis.fetch = (async () => {
+      const response = responses.shift()
+      assert(response)
+      return response
+    }) as typeof fetch
+
+    const result = await fetchGlbJson(
+      'https://models.example.com/model.glb'
+    )
+
+    assert.deepEqual(result, {
+      ok: false,
+      title: 'Remote GLB cannot be validated safely',
+      description:
+        'The remote server must return a strong ETag for ranged requests.',
+      status: 502,
+    })
     assert.equal(responses.length, 0)
   })
 

@@ -54,7 +54,8 @@ curl -X POST https://gltf.joyco.studio/api/validate \
 
 Remote validation is disabled until `GLTF_VALIDATION_REMOTE_HOSTS` contains a
 comma-separated allowlist of R2 hostnames. Wildcard entries such as
-`*.r2.dev` are supported.
+`*.r2.dev` are supported. The object response must include a strong ETag so
+both reads are pinned to the same object version.
 
 The endpoint returns a JSON array. The browser inspector calls the same
 environment-neutral validator, so both surfaces share one result contract and

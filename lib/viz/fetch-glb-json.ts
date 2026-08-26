@@ -8,6 +8,8 @@ type FetchGlbJsonResult =
   | { ok: true; json: unknown }
   | { ok: false; title: string; description: string; status: number }
 
+class RemoteGlbChangedError extends Error {}
+
 function failure(
   title: string,
   description: string,
@@ -111,16 +113,35 @@ function contentRange(response: Response) {
     : null
 }
 
-async function fetchBytes(url: URL, start: number, length: number) {
+function strongEtag(response: Response) {
+  const etag = response.headers.get('etag')
+  return etag && !/^W\//i.test(etag) ? etag : null
+}
+
+async function fetchBytes(
+  url: URL,
+  start: number,
+  length: number,
+  expectedEtag?: string
+) {
+  const headers: Record<string, string> = {
+    'Accept-Encoding': 'identity',
+    Range: `bytes=${start}-${start + length - 1}`,
+  }
+  if (expectedEtag) headers['If-Range'] = expectedEtag
+
   const response = await fetch(url, {
-    headers: {
-      'Accept-Encoding': 'identity',
-      Range: `bytes=${start}-${start + length - 1}`,
-    },
+    headers,
     cache: 'no-store',
     redirect: 'error',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
+
+  const etag = strongEtag(response)
+  if (expectedEtag && etag !== expectedEtag) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new RemoteGlbChangedError()
+  }
 
   if (response.status === 206) {
     const range = contentRange(response)
@@ -130,6 +151,7 @@ async function fetchBytes(url: URL, start: number, length: number) {
     return {
       bytes: await readWindow(response, 0, length),
       byteLength: range.byteLength,
+      etag,
     }
   }
 
@@ -141,6 +163,7 @@ async function fetchBytes(url: URL, start: number, length: number) {
         contentLength && /^\d+$/.test(contentLength)
           ? Number(contentLength)
           : null,
+      etag,
     }
   }
 
@@ -156,6 +179,14 @@ async function fetchGlbJson(source: string): Promise<FetchGlbJsonResult> {
     const header = parseGlbHeader(remoteHeader.bytes)
     if (!header.ok) {
       return failure('Invalid remote GLB', header.error, 422)
+    }
+
+    if (!remoteHeader.etag) {
+      return failure(
+        'Remote GLB cannot be validated safely',
+        'The remote server must return a strong ETag for ranged requests.',
+        502
+      )
     }
 
     if (
@@ -180,7 +211,8 @@ async function fetchGlbJson(source: string): Promise<FetchGlbJsonResult> {
     const remoteJson = await fetchBytes(
       parsedUrl,
       GLB_HEADER_LENGTH,
-      header.jsonLength
+      header.jsonLength,
+      remoteHeader.etag
     )
     if (
       remoteJson.byteLength !== null &&
@@ -198,6 +230,14 @@ async function fetchGlbJson(source: string): Promise<FetchGlbJsonResult> {
       ? parsed
       : failure('Invalid remote GLB', parsed.error, 422)
   } catch (reason) {
+    if (reason instanceof RemoteGlbChangedError) {
+      return failure(
+        'Remote GLB changed during validation',
+        'Retry validation after the object has finished updating.',
+        409
+      )
+    }
+
     const timedOut =
       reason instanceof DOMException && reason.name === 'TimeoutError'
     return failure(
