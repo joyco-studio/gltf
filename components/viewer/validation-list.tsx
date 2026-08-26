@@ -134,6 +134,7 @@ function ValidationSection({
 }
 
 function ValidationList({ issues }: { issues: GltfValidationResult[] }) {
+  const { validationSchemaError } = useViewer()
   const errors = issues.filter((result) => result.type === 'error')
   const warnings = issues.filter((result) => result.type === 'warning')
 
@@ -142,6 +143,11 @@ function ValidationList({ issues }: { issues: GltfValidationResult[] }) {
       <div className="flex border-b bg-muted/50 px-2 py-1">
         <ValidationSchemaEditor />
       </div>
+      {validationSchemaError ? (
+        <p className="border-b px-4 py-3 text-sm text-destructive" role="alert">
+          {validationSchemaError}
+        </p>
+      ) : null}
       <ValidationSection type="error" results={errors} />
       <ValidationSection type="warning" results={warnings} />
     </div>

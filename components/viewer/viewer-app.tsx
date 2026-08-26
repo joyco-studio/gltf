@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 
+import { fetchValidationSchema } from "@/lib/viz/fetch-validation-schema";
+
 import { ControlsToolbar } from "./controls-toolbar";
 import { EmptyState } from "./empty-state";
 import { EXAMPLE_MODEL } from "./example-model";
@@ -16,17 +18,28 @@ import { ViewerHeader } from "./viewer-header";
 import { ViewerProvider, useViewer } from "./viewer-provider";
 
 /**
- * Consumes the initial deep link: loads `?url=` once the viewer is attached,
- * then jumps to `?path=` (e.g. `materials.mat_1`) once that document is parsed.
+ * Consumes the initial deep link: loads `?url=` and `?schemaUrl=` once the
+ * viewer is attached, then jumps to `?path=` (e.g. `materials.mat_1`) once
+ * that document is parsed.
  * The active `?tab=` is owned by nuqs in ViewerProvider; it is captured here
  * only so an explicit tab wins while restoring a path.
  *
- * The model URL and selection path are read *once* at first load; later writes
- * from openUrl/openFiles/jumpTo must not feed back here as a reload. The tab is
- * intentionally live so direct links and browser navigation update the UI.
+ * The model URL, schema URL, and selection path are read *once* at first load;
+ * later writes must not feed back here as reloads. The tab is intentionally
+ * live so direct links and browser navigation update the UI.
  */
 function UrlParamLoader() {
-  const { viewer, snapshot, openUrl, jumpTo, tab, setTab } = useViewer();
+  const {
+    viewer,
+    snapshot,
+    openUrl,
+    jumpTo,
+    tab,
+    setTab,
+    setValidationSchema,
+    getValidationSchemaRevision,
+    setValidationSchemaError,
+  } = useViewer();
   const searchParams = useSearchParams();
   const startedRef = React.useRef(false);
   // captured at first load, before openUrl clears ?path; applied to the first
@@ -40,6 +53,16 @@ function UrlParamLoader() {
     // consume the one-shot the moment the viewer is ready, even with no ?url —
     // otherwise the first paste's ?url= write would re-enter here and double-load
     startedRef.current = true;
+    const schemaUrl = searchParams.get("schemaUrl");
+    if (schemaUrl) {
+      const schemaRevision = getValidationSchemaRevision();
+      void fetchValidationSchema(schemaUrl).then((result) => {
+        if (getValidationSchemaRevision() !== schemaRevision) return;
+        if (result.ok) setValidationSchema(result.schema, result.url);
+        else setValidationSchemaError(result.error);
+      });
+    }
+
     const url = parseHttpUrl(searchParams.get("url") ?? "");
     if (!url) return;
     initialPathRef.current = searchParams.get("path");
@@ -50,7 +73,15 @@ function UrlParamLoader() {
         ? { position: EXAMPLE_MODEL.position, scale: EXAMPLE_MODEL.scale }
         : undefined;
     openUrl(url, transform);
-  }, [viewer, searchParams, tab, openUrl]);
+  }, [
+    viewer,
+    searchParams,
+    tab,
+    openUrl,
+    setValidationSchema,
+    getValidationSchemaRevision,
+    setValidationSchemaError,
+  ]);
 
   React.useEffect(() => {
     const { document } = snapshot;

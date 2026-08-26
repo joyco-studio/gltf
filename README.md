@@ -17,10 +17,11 @@ The viewer runs client-side; no files are uploaded.
 - **Contents browser** — sortable tables for meshes, materials, and animations,
   plus a texture grid. Click any row to inspect and highlight it in the scene.
 - **⌘K search** — fuzzy search across every element in the document.
-- **Shareable viewer state** — the loaded model, inspected element, and active
-  sidebar tab are encoded in the URL search params (`?url=`, `?path=`, and
-  `?tab=`), so a link reopens the same view, e.g.
-  `gltf.joyco.studio/?url=https://example.com/model.glb&tab=validation`.
+- **Shareable viewer state** — the loaded model, validation schema, inspected
+  element, and active sidebar tab are encoded in the URL search params
+  (`?url=`, `?schemaUrl=`, `?path=`, and `?tab=`), so a link reopens the same
+  view, e.g.
+  `gltf.joyco.studio/?url=https://example.com/model.glb&schemaUrl=https://example.com/schema.json&tab=validation`.
 - **Local & private** — files are resolved in the browser; nothing leaves the
   machine.
 
@@ -77,9 +78,14 @@ itself remains client-side and does not call this API or upload models.
 
 ### Custom validation schemas
 
-The Validation tab accepts a pasted or uploaded JSON schema and applies it to
-the current model without uploading the asset. The same schema can be sent to
-the API in a `{ "document", "schema" }` envelope:
+The Validation tab accepts a pasted or uploaded JSON schema, or loads and
+applies one directly from an HTTP(S) URL, without uploading the asset. Remote
+schema hosts must allow cross-origin browser requests. The same schema can be
+sent to the API in a `{ "document", "schema" }` envelope:
+
+Use `?schemaUrl=https://example.com/schema.json&tab=validation` alongside the
+model's `?url=` to share a viewer that loads the model, applies the schema, and
+opens directly on its validation results.
 
 ```json
 {

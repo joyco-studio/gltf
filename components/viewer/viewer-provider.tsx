@@ -49,9 +49,13 @@ interface ViewerContextValue {
   searchOpen: boolean
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   validationSchema: GltfValidationSchema | null
-  setValidationSchema: React.Dispatch<
-    React.SetStateAction<GltfValidationSchema | null>
-  >
+  validationSchemaError: string | null
+  setValidationSchema: (
+    schema: GltfValidationSchema | null,
+    sourceUrl?: string
+  ) => void
+  getValidationSchemaRevision: () => number
+  setValidationSchemaError: React.Dispatch<React.SetStateAction<string | null>>
 }
 
 const ViewerContext = React.createContext<ViewerContextValue | null>(null)
@@ -76,8 +80,11 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
-  const [validationSchema, setValidationSchema] =
+  const [validationSchema, setValidationSchemaState] =
     React.useState<GltfValidationSchema | null>(null)
+  const validationSchemaRevisionRef = React.useRef(0)
+  const [validationSchemaError, setValidationSchemaError] =
+    React.useState<string | null>(null)
   // source URL of the active model, or null when loaded from local files —
   // lets the UI credit the bundled example while it's on screen
   const [source, setSource] = React.useState<string | null>(null)
@@ -110,6 +117,29 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     viewer?.setValidationSchema(validationSchema)
   }, [viewer, validationSchema])
+
+  const setValidationSchema = React.useCallback(
+    (schema: GltfValidationSchema | null, sourceUrl?: string) => {
+      validationSchemaRevisionRef.current += 1
+      setValidationSchemaState(schema)
+      setValidationSchemaError(null)
+
+      const params = new URLSearchParams(window.location.search)
+      if (schema && sourceUrl) params.set('schemaUrl', sourceUrl)
+      else params.delete('schemaUrl')
+      const query = params.toString()
+      window.history.replaceState(
+        null,
+        '',
+        query ? `?${query}` : window.location.pathname
+      )
+    },
+    []
+  )
+  const getValidationSchemaRevision = React.useCallback(
+    () => validationSchemaRevisionRef.current,
+    []
+  )
 
   // A viewport ⌘-click frames + highlights the mesh in the engine on its
   // own; mirror it into the React UI so the sidebar selection and ?path stay
@@ -219,7 +249,10 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       searchOpen,
       setSearchOpen,
       validationSchema,
+      validationSchemaError,
       setValidationSchema,
+      getValidationSchemaRevision,
+      setValidationSchemaError,
     }),
     [
       viewer,
@@ -236,6 +269,9 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       selection,
       searchOpen,
       validationSchema,
+      validationSchemaError,
+      setValidationSchema,
+      getValidationSchemaRevision,
     ]
   )
 
