@@ -126,7 +126,7 @@ function ValidationSchemaEditor() {
           ) : null}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Custom validation schema</DialogTitle>
           <DialogDescription>
@@ -169,7 +169,7 @@ function ValidationSchemaEditor() {
           aria-label="Validation schema JSON"
           aria-invalid={Boolean(error)}
           spellCheck={false}
-          className="min-h-96 resize-y font-mono text-xs leading-5"
+          className="min-h-96 field-sizing-fixed resize-y font-mono text-xs leading-5"
         />
 
         {error ? (
