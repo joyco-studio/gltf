@@ -77,10 +77,10 @@ itself remains client-side and does not call this API or upload models.
 
 ### Custom validation schemas
 
-The Validation tab accepts a pasted or uploaded JSON schema, or loads one from
-an HTTP(S) URL, and applies it to the current model without uploading the asset.
-Remote schema hosts must allow cross-origin browser requests. The same schema
-can be sent to the API in a `{ "document", "schema" }` envelope:
+The Validation tab accepts a pasted or uploaded JSON schema, or loads and
+applies one directly from an HTTP(S) URL, without uploading the asset. Remote
+schema hosts must allow cross-origin browser requests. The same schema can be
+sent to the API in a `{ "document", "schema" }` envelope:
 
 ```json
 {

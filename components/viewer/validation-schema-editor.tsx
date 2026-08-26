@@ -49,15 +49,7 @@ function ValidationSchemaEditor() {
     }
   }
 
-  const apply = () => {
-    let source: unknown
-    try {
-      source = JSON.parse(draft)
-    } catch {
-      setError('The schema is not valid JSON.')
-      return
-    }
-
+  const applySource = (source: unknown) => {
     const parsed = parseGltfValidationSchema(source)
     if (!parsed.ok) {
       setError(parsed.errors.join(' '))
@@ -66,6 +58,14 @@ function ValidationSchemaEditor() {
 
     setValidationSchema(parsed.schema)
     setOpen(false)
+  }
+
+  const apply = () => {
+    try {
+      applySource(JSON.parse(draft))
+    } catch {
+      setError('The schema is not valid JSON.')
+    }
   }
 
   const importFile = async (file: File | undefined) => {
@@ -89,7 +89,11 @@ function ValidationSchemaEditor() {
       return
     }
 
-    setDraft(result.text)
+    try {
+      applySource(JSON.parse(result.text))
+    } catch {
+      setError('The loaded schema is not valid JSON.')
+    }
   }
 
   return (
