@@ -85,7 +85,7 @@ const columns: ColumnDef<NodeRow>[] = [
  * The scene graph as a collapsible outliner. Each row is a node, indented by
  * depth; nodes that reference a mesh carry its stats, transform/group nodes
  * render as empty parent rows. Rows select the exact glTF node so transform
- * information stays instance-specific; viewport picking remains mesh-based.
+ * information stays instance-specific, matching viewport picking.
  */
 function HierarchyTable({
   nodes,

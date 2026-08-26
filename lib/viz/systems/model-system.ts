@@ -257,29 +257,34 @@ class ModelSystem implements System {
   }
 
   /**
-   * glTF document mesh index a runtime object belongs to — walks up from a
-   * raycast hit (the `Mesh` primitive) to the nearest object the parser
-   * associated with a document mesh. `undefined` for anything not from the
-   * loaded glTF (helpers, the grid, etc.).
+   * Exact glTF node owning a raycast hit. Multi-primitive meshes associate
+   * their node index with the parent group, so walk upward from the primitive.
    */
-  getMeshIdForObject(object: Object3D): number | undefined {
+  getNodeTargetForObject(
+    object: Object3D
+  ): (InspectTarget & { kind: 'node' }) | null {
     let current: Object3D | null = object
     while (current) {
-      if (current instanceof Mesh) {
-        const id = this.associations?.get(current)?.meshes
-        if (id !== undefined) return id
+      const id = this.associations?.get(current)?.nodes
+      if (id !== undefined) {
+        const json = this.current?.gltf.parser.json as
+          | {
+              meshes?: { name?: string }[]
+              nodes?: { mesh?: number; name?: string }[]
+            }
+          | undefined
+        const node = json?.nodes?.[id]
+        const meshName =
+          node?.mesh !== undefined ? json?.meshes?.[node.mesh]?.name : undefined
+        return {
+          kind: 'node',
+          id,
+          name: node?.name?.trim() || meshName || `node_${id}`,
+        }
       }
       current = current.parent
     }
-    return undefined
-  }
-
-  /** Document name of a glTF mesh by index, with the same fallback as the UI. */
-  getMeshName(meshId: number): string {
-    const json = this.current?.gltf.parser.json as
-      | { meshes?: { name?: string }[] }
-      | undefined
-    return json?.meshes?.[meshId]?.name ?? `mesh_${meshId}`
+    return null
   }
 
   /** Exact runtime object created for a glTF node definition. */

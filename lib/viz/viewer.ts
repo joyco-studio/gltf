@@ -31,8 +31,8 @@ interface ViewerSnapshot {
 
 interface ViewerEvents extends Record<string, unknown> {
   change: ViewerSnapshot
-  /** A mesh was picked directly in the viewport (⌘-click). */
-  pick: { kind: 'mesh'; id: number; name: string }
+  /** A scene node was picked directly in the viewport (⌘-click). */
+  pick: { kind: 'node'; id: number; name: string }
 }
 
 const EMPTY_SNAPSHOT: ViewerSnapshot = {
