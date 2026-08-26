@@ -176,6 +176,20 @@ class ModelSystem implements System {
     )
   }
 
+  /** Every renderable nested under one exact glTF scene node. */
+  getMeshesForNode(nodeId: number): Mesh[] {
+    if (!this.current) return []
+
+    const meshes = new Set<Mesh>()
+    this.current.root.traverse((object) => {
+      if (this.associations?.get(object)?.nodes !== nodeId) return
+      object.traverse((child) => {
+        if (child instanceof Mesh) meshes.add(child)
+      })
+    })
+    return [...meshes]
+  }
+
   /** Every renderable with at least one primitive using a glTF material. */
   getMeshesUsingMaterial(materialId: number): Mesh[] {
     return this.collectMeshes((mesh) =>
@@ -225,13 +239,18 @@ class ModelSystem implements System {
     return json?.meshes?.[meshId]?.name ?? `mesh_${meshId}`
   }
 
-  /** Renderables an inspect target resolves to (mesh / material / texture). */
+  /** Renderables an inspect target resolves to. */
   getMeshesForTarget(target: InspectTarget): Mesh[] {
-    return target.kind === 'mesh'
-      ? this.getMeshObjects(target.id)
-      : target.kind === 'material'
-        ? this.getMeshesUsingMaterial(target.id)
-        : this.getMeshesUsingTexture(target.id)
+    switch (target.kind) {
+      case 'node':
+        return this.getMeshesForNode(target.id)
+      case 'mesh':
+        return this.getMeshObjects(target.id)
+      case 'material':
+        return this.getMeshesUsingMaterial(target.id)
+      case 'texture':
+        return this.getMeshesUsingTexture(target.id)
+    }
   }
 
   /** Combined world-space bounding box of a set of renderables. */

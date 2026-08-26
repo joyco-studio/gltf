@@ -99,6 +99,31 @@ function DataTable<Row>({
     );
   }, [data, columns, sort, tree]);
 
+  const treeColumnKey = tree ? (tree.columnKey ?? columns[0]?.key) : null;
+
+  // A jump from elsewhere in the inspector may target a node hidden under a
+  // collapsed ancestor. Derive an open path without erasing the user's saved
+  // collapse state; it returns when selection moves elsewhere.
+  const visibleCollapsed = React.useMemo(() => {
+    if (!tree || !selectedId) return collapsed;
+    const selectedIndex = sorted.findIndex(
+      (row) => rowId(row) === selectedId,
+    );
+    if (selectedIndex < 0) return collapsed;
+
+    const next = new Set(collapsed);
+    let depth = tree.depth(sorted[selectedIndex]);
+
+    for (let index = selectedIndex - 1; index >= 0 && depth > 0; index--) {
+      const row = sorted[index];
+      if (tree.depth(row) !== depth - 1) continue;
+      next.delete(rowId(row));
+      depth--;
+    }
+
+    return next;
+  }, [collapsed, selectedId, sorted, rowId, tree]);
+
   // Walk the DFS list, dropping every row that sits under a collapsed ancestor.
   const visibleRows = React.useMemo(() => {
     if (!tree) return sorted;
@@ -109,14 +134,12 @@ function DataTable<Row>({
       if (depth > hideBelow) continue;
       hideBelow = Infinity;
       rows.push(row);
-      if (tree.hasChildren(row) && collapsed.has(rowId(row))) {
+      if (tree.hasChildren(row) && visibleCollapsed.has(rowId(row))) {
         hideBelow = depth;
       }
     }
     return rows;
-  }, [tree, sorted, collapsed, rowId]);
-
-  const treeColumnKey = tree ? (tree.columnKey ?? columns[0]?.key) : null;
+  }, [tree, sorted, visibleCollapsed, rowId]);
 
   const toggleCollapse = (id: string) => {
     setCollapsed((current) => {
@@ -135,11 +158,17 @@ function DataTable<Row>({
     });
   };
 
+  const selectedVisible = selectedId
+    ? visibleRows.some((row) =>
+        isSelected ? isSelected(row) : rowId(row) === selectedId,
+      )
+    : false;
+
   React.useEffect(() => {
-    if (selectedId) {
+    if (selectedId && selectedVisible) {
       selectedRowRef.current?.scrollIntoView({ block: "center" });
     }
-  }, [selectedId]);
+  }, [selectedId, selectedVisible]);
 
   return (
     <Table>
@@ -214,7 +243,9 @@ function DataTable<Row>({
                       {tree.hasChildren(row) ? (
                         <button
                           type="button"
-                          aria-label={collapsed.has(id) ? "Expand" : "Collapse"}
+                          aria-label={
+                            visibleCollapsed.has(id) ? "Expand" : "Collapse"
+                          }
                           onClick={(event) => {
                             event.stopPropagation();
                             toggleCollapse(id);
@@ -224,7 +255,7 @@ function DataTable<Row>({
                           <ChevronRight
                             className={cn(
                               "size-3 transition-transform",
-                              !collapsed.has(id) && "rotate-90",
+                              !visibleCollapsed.has(id) && "rotate-90",
                             )}
                           />
                         </button>

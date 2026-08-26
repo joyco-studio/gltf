@@ -1,9 +1,16 @@
 type GltfValidationType = 'error' | 'warning'
 
+interface GltfValidationReference {
+  kind: 'node'
+  id: number
+  label: string
+}
+
 interface GltfValidationResult {
   type: GltfValidationType
   title: string
   description: string
+  references?: GltfValidationReference[]
 }
 
 function invalidDocument(description: string): GltfValidationResult[] {
@@ -47,12 +54,25 @@ function validateGltf(source: unknown): GltfValidationResult[] {
 
   return [...nodeIdsByName.entries()]
     .filter(([, ids]) => ids.length > 1)
-    .map(([name, ids]) => ({
-      type: 'warning',
-      title: `${ids.length} nodes share the name “${name}”`,
-      description: `Nodes ${ids.map((id) => `#${id}`).join(', ')} use the same name. Three.js GLTFLoader applies suffixes to later matches so their runtime names are unique. Code targeting “${name}” may therefore fail to find the intended node after loading.`,
-    }))
+    .map(([name, ids]) => {
+      const references = ids.map((id) => ({
+        kind: 'node' as const,
+        id,
+        label: `#${id}`,
+      }))
+
+      return {
+        type: 'warning' as const,
+        title: `${ids.length} nodes share the name “${name}”`,
+        description: `Nodes ${references.map(({ label }) => label).join(', ')} use the same name. Three.js GLTFLoader applies suffixes to later matches so their runtime names are unique. Code targeting “${name}” may therefore fail to find the intended node after loading.`,
+        references,
+      }
+    })
 }
 
 export { validateGltf }
-export type { GltfValidationResult, GltfValidationType }
+export type {
+  GltfValidationReference,
+  GltfValidationResult,
+  GltfValidationType,
+}

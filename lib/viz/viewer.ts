@@ -132,11 +132,15 @@ class Viewer extends EventEmitter<ViewerEvents> {
   }
 
   /**
-   * Frame a glTF entity for close inspection: a mesh directly, a material
-   * via every mesh using it, a texture via every mesh whose materials
-   * sample it. No-op when nothing renderable resolves.
+   * Frame a glTF entity for close inspection: a node or mesh directly, a
+   * material via every mesh using it, a texture via every mesh whose
+   * materials sample it. No-op when nothing renderable resolves.
    */
-  inspectItem(kind: 'mesh' | 'material' | 'texture', id: number, name: string) {
+  inspectItem(
+    kind: 'node' | 'mesh' | 'material' | 'texture',
+    id: number,
+    name: string
+  ) {
     const meshes = this.model.getMeshesForTarget({ kind, id, name })
 
     const box = this.model.getWorldBoxOfMeshes(meshes)

@@ -114,9 +114,17 @@ function HierarchyTable({
         depth: (node) => node.depth,
         hasChildren: (node) => node.hasChildren,
       }}
-      selectedId={selection?.kind === "mesh" ? `mesh-${selection.id}` : null}
+      selectedId={
+        selection?.kind === "node"
+          ? `node-${selection.id}`
+          : selection?.kind === "mesh"
+            ? `mesh-${selection.id}`
+            : null
+      }
       isSelected={(node) =>
-        selection?.kind === "mesh" && node.meshId === selection.id
+        selection?.kind === "node"
+          ? node.id === selection.id
+          : selection?.kind === "mesh" && node.meshId === selection.id
       }
       onRowClick={(node) => {
         if (node.meshId === null) return;

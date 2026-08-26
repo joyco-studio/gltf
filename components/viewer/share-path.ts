@@ -9,14 +9,16 @@ import type { Selection } from './viewer-provider'
  */
 
 const SEGMENT_BY_KIND = {
+  node: 'nodes',
   mesh: 'meshes',
   material: 'materials',
   texture: 'textures',
   animation: 'animations',
 } as const satisfies Record<Selection['kind'], keyof GltfDocumentInfo>
 
-function formatSharePath(kind: Selection['kind'], name: string) {
-  return `${SEGMENT_BY_KIND[kind]}.${name}`
+function formatSharePath(selection: Selection, name: string) {
+  const value = selection.kind === 'node' ? `#${selection.id}` : name
+  return `${SEGMENT_BY_KIND[selection.kind]}.${value}`
 }
 
 function resolveSharePath(
@@ -34,9 +36,11 @@ function resolveSharePath(
   if (!kind || !name) return null
 
   const items = document[SEGMENT_BY_KIND[kind]]
-  const item =
-    items.find((entry) => entry.name === name) ??
-    items.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
+  const nodeId = kind === 'node' ? /^#(\d+)$/.exec(name) : null
+  const item = nodeId
+    ? items.find((entry) => entry.id === Number(nodeId[1]))
+    : items.find((entry) => entry.name === name) ??
+      items.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
   return item ? { selection: { kind, id: item.id }, name: item.name } : null
 }
 
