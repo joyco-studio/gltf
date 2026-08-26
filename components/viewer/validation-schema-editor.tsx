@@ -38,17 +38,28 @@ function ValidationSchemaEditor() {
   const [loadingUrl, setLoadingUrl] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const urlRequestRef = React.useRef<AbortController | null>(null)
+
+  React.useEffect(
+    () => () => {
+      urlRequestRef.current?.abort()
+    },
+    []
+  )
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen)
-    if (nextOpen) {
-      setDraft(formatSchema(validationSchema ?? EXAMPLE_VALIDATION_SCHEMA))
-      setSchemaUrl(
-        new URLSearchParams(window.location.search).get('schemaUrl') ?? ''
-      )
-      setLoadingUrl(false)
-      setError(null)
+    if (!nextOpen) {
+      urlRequestRef.current?.abort()
+      urlRequestRef.current = null
+      return
     }
+    setDraft(formatSchema(validationSchema ?? EXAMPLE_VALIDATION_SCHEMA))
+    setSchemaUrl(
+      new URLSearchParams(window.location.search).get('schemaUrl') ?? ''
+    )
+    setLoadingUrl(false)
+    setError(null)
   }
 
   const applySource = (source: unknown) => {
@@ -81,9 +92,16 @@ function ValidationSchemaEditor() {
   }
 
   const importUrl = async () => {
+    urlRequestRef.current?.abort()
+    const controller = new AbortController()
+    urlRequestRef.current = controller
     setLoadingUrl(true)
     setError(null)
-    const result = await fetchValidationSchema(schemaUrl)
+    const result = await fetchValidationSchema(schemaUrl, {
+      signal: controller.signal,
+    })
+    if (urlRequestRef.current !== controller) return
+    urlRequestRef.current = null
     setLoadingUrl(false)
 
     if (!result.ok) {
