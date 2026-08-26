@@ -3,11 +3,6 @@ import { parseGlbHeader, parseGlbJsonChunk } from './parse-glb'
 const GLB_HEADER_LENGTH = 20
 const MAX_JSON_CHUNK_LENGTH = 4 * 1024 * 1024
 const REQUEST_TIMEOUT_MS = 10_000
-const DEFAULT_ALLOWED_HOSTS = [
-  'r2.joyco.studio',
-  '*.r2.dev',
-  '*.r2.cloudflarestorage.com',
-]
 
 type FetchGlbJsonResult =
   | { ok: true; json: unknown }
@@ -22,13 +17,10 @@ function failure(
 }
 
 function allowedHosts() {
-  const configured = process.env.GLTF_VALIDATION_REMOTE_HOSTS
-  return configured
-    ? configured
-        .split(',')
-        .map((host) => host.trim().toLowerCase())
-        .filter(Boolean)
-    : DEFAULT_ALLOWED_HOSTS
+  return (process.env.GLTF_VALIDATION_REMOTE_HOSTS ?? '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean)
 }
 
 function hostMatches(hostname: string, pattern: string) {

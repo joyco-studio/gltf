@@ -77,15 +77,17 @@ describe('fetchGlbJson', () => {
     assert.equal(responses.length, 0)
   })
 
-  it('rejects hosts outside the R2 allowlist before fetching', async () => {
-    process.env.GLTF_VALIDATION_REMOTE_HOSTS = 'r2.joyco.studio'
+  it('rejects every host when no allowlist is configured', async () => {
+    delete process.env.GLTF_VALIDATION_REMOTE_HOSTS
     let fetched = false
     globalThis.fetch = (async () => {
       fetched = true
       throw new Error('Unexpected fetch')
     }) as typeof fetch
 
-    const result = await fetchGlbJson('https://example.com/model.glb')
+    const result = await fetchGlbJson(
+      'https://r2.joyco.studio/models/model.glb'
+    )
 
     assert.deepEqual(result, {
       ok: false,

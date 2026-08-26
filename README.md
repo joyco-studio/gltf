@@ -52,10 +52,9 @@ curl -X POST https://gltf.joyco.studio/api/validate \
   --data '{"url":"https://r2.joyco.studio/models/model.glb"}'
 ```
 
-Remote validation allows `r2.joyco.studio`, `*.r2.dev`, and
-`*.r2.cloudflarestorage.com` by default. Set the comma-separated
-`GLTF_VALIDATION_REMOTE_HOSTS` environment variable to use other R2 custom
-domains. Wildcard entries such as `*.example.com` are supported.
+Remote validation is disabled until `GLTF_VALIDATION_REMOTE_HOSTS` contains a
+comma-separated allowlist of R2 hostnames. Wildcard entries such as
+`*.r2.dev` are supported.
 
 The endpoint returns a JSON array. The browser inspector calls the same
 environment-neutral validator, so both surfaces share one result contract and
