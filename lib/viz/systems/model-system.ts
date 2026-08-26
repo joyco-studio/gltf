@@ -1,11 +1,13 @@
 import {
   Box3,
+  Euler,
   Group,
   Material,
   Mesh,
   Quaternion,
   REVISION,
   Texture,
+  Vector3,
   type LoadingManager,
   type Object3D,
 } from 'three/webgpu'
@@ -38,6 +40,47 @@ interface LoadedModel {
 interface ModelTransform {
   position?: readonly [number, number, number]
   scale?: number
+}
+
+type Vector3Tuple = readonly [number, number, number]
+
+interface ElementTransform {
+  position: Vector3Tuple
+  /** XYZ Euler angles in radians. */
+  rotation: Vector3Tuple
+  scale: Vector3Tuple
+}
+
+interface ElementTransformInfo {
+  local: ElementTransform | null
+  world: ElementTransform
+  bounds: { center: Vector3Tuple; size: Vector3Tuple } | null
+  /** Number of runtime mesh primitives represented by this selection. */
+  renderables: number
+}
+
+function tuple(vector: Vector3): Vector3Tuple {
+  return [vector.x, vector.y, vector.z]
+}
+
+function transformFromObject(object: Object3D, world: boolean): ElementTransform {
+  const position = new Vector3()
+  const quaternion = new Quaternion()
+  const scale = new Vector3()
+
+  if (world) object.matrixWorld.decompose(position, quaternion, scale)
+  else {
+    position.copy(object.position)
+    quaternion.copy(object.quaternion)
+    scale.copy(object.scale)
+  }
+
+  const rotation = new Euler().setFromQuaternion(quaternion, 'XYZ')
+  return {
+    position: tuple(position),
+    rotation: [rotation.x, rotation.y, rotation.z],
+    scale: tuple(scale),
+  }
 }
 
 function disposeMaterial(material: Material) {
@@ -239,6 +282,57 @@ class ModelSystem implements System {
     return json?.meshes?.[meshId]?.name ?? `mesh_${meshId}`
   }
 
+  /** Exact runtime object created for a glTF node definition. */
+  private getNodeObject(nodeId: number): Object3D | null {
+    if (!this.current) return null
+
+    let match: Object3D | null = null
+    this.current.root.traverse((object) => {
+      if (!match && this.associations?.get(object)?.nodes === nodeId) {
+        match = object
+      }
+    })
+    return match
+  }
+
+  /**
+   * Read-only transform data for the element details UI. A glTF node has one
+   * exact local transform; a mesh is a reusable resource, so its world
+   * transform is represented by the first runtime primitive while bounds span
+   * every instance.
+   */
+  getElementTransformInfo(target: {
+    kind: 'node' | 'mesh'
+    id: number
+  }): ElementTransformInfo | null {
+    if (!this.current) return null
+
+    const renderables =
+      target.kind === 'node'
+        ? this.getMeshesForNode(target.id)
+        : this.getMeshObjects(target.id)
+    const object =
+      target.kind === 'node'
+        ? this.getNodeObject(target.id)
+        : (renderables[0] ?? null)
+    if (!object) return null
+
+    this.current.root.updateWorldMatrix(true, true)
+    const box = this.getWorldBoxOfMeshes(renderables)
+
+    return {
+      local: target.kind === 'node' ? transformFromObject(object, false) : null,
+      world: transformFromObject(object, true),
+      bounds: box
+        ? {
+            center: tuple(box.getCenter(new Vector3())),
+            size: tuple(box.getSize(new Vector3())),
+          }
+        : null,
+      renderables: renderables.length,
+    }
+  }
+
   /** Renderables an inspect target resolves to. */
   getMeshesForTarget(target: InspectTarget): Mesh[] {
     switch (target.kind) {
@@ -304,4 +398,10 @@ class ModelSystem implements System {
 }
 
 export { ModelSystem }
-export type { LoadedModel, ModelTransform }
+export type {
+  ElementTransform,
+  ElementTransformInfo,
+  LoadedModel,
+  ModelTransform,
+  Vector3Tuple,
+}
