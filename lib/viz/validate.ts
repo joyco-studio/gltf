@@ -1,7 +1,12 @@
+import {
+  validateWithSchema,
+  type GltfValidationSchema,
+} from './validation-schema'
+
 type GltfValidationType = 'error' | 'warning'
 
 interface GltfValidationReference {
-  kind: 'node'
+  kind: 'node' | 'mesh' | 'material' | 'texture' | 'animation'
   id: number
   label: string
 }
@@ -11,6 +16,8 @@ interface GltfValidationResult {
   title: string
   description: string
   references?: GltfValidationReference[]
+  /** Present when the finding came from a user-supplied schema rule. */
+  ruleId?: string
 }
 
 function invalidDocument(description: string): GltfValidationResult[] {
@@ -34,7 +41,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * This function is environment-neutral so the viewer and public API use the
  * exact same validation rules and response contract.
  */
-function validateGltf(source: unknown): GltfValidationResult[] {
+function validateGltf(
+  source: unknown,
+  schema?: GltfValidationSchema | null
+): GltfValidationResult[] {
   if (!isRecord(source)) {
     return invalidDocument('Expected a glTF JSON object.')
   }
@@ -52,7 +62,7 @@ function validateGltf(source: unknown): GltfValidationResult[] {
     nodeIdsByName.set(node.name, ids)
   }
 
-  return [...nodeIdsByName.entries()]
+  const builtInResults = [...nodeIdsByName.entries()]
     .filter(([, ids]) => ids.length > 1)
     .map(([name, ids]) => {
       const references = ids.map((id) => ({
@@ -68,6 +78,10 @@ function validateGltf(source: unknown): GltfValidationResult[] {
         references,
       }
     })
+
+  return schema
+    ? [...builtInResults, ...validateWithSchema(source, schema)]
+    : builtInResults
 }
 
 export { validateGltf }

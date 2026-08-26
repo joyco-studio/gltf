@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gltf.joyco.studio/validation-schema.json",
+  "title": "glTF custom validation schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rules"],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri" },
+    "version": { "const": 1 },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "operator"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": {
+          "type": "string",
+          "description": "RFC 9535 JSONPath expression.",
+          "pattern": "^\\$"
+        },
+        "operator": {
+          "enum": [
+            "exists",
+            "count",
+            "includesAll",
+            "includesAny",
+            "unique",
+            "equals",
+            "notEquals",
+            "matches",
+            "lessThan",
+            "lessThanOrEqual",
+            "greaterThan",
+            "greaterThanOrEqual"
+          ]
+        },
+        "value": true,
+        "flags": { "type": "string" },
+        "level": { "enum": ["error", "warning"], "default": "error" },
+        "title": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "operator": { "const": "unique" } } },
+          "then": { "not": { "required": ["value"] } },
+          "else": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "operator": { "const": "exists" } } },
+          "then": { "properties": { "value": { "type": "boolean" } } }
+        },
+        {
+          "if": { "properties": { "operator": { "const": "count" } } },
+          "then": {
+            "properties": { "value": { "type": "integer", "minimum": 0 } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": { "enum": ["includesAll", "includesAny"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": { "type": "array", "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "operator": { "const": "matches" } } },
+          "then": { "properties": { "value": { "type": "string" } } },
+          "else": { "not": { "required": ["flags"] } }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "lessThan",
+                  "lessThanOrEqual",
+                  "greaterThan",
+                  "greaterThanOrEqual"
+                ]
+              }
+            }
+          },
+          "then": { "properties": { "value": { "type": "number" } } }
+        }
+      ]
+    }
+  }
+}

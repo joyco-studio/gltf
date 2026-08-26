@@ -11,10 +11,30 @@ import type {
 } from '@/lib/viz/validate'
 
 import { useViewer } from './viewer-provider'
+import { ValidationSchemaEditor } from './validation-schema-editor'
 
 const TYPE_LABELS: Record<GltfValidationType, string> = {
   error: 'Errors',
   warning: 'Warnings',
+}
+
+function referenceName(
+  document: ReturnType<typeof useViewer>['snapshot']['document'],
+  reference: GltfValidationReference
+) {
+  if (!document) return undefined
+  switch (reference.kind) {
+    case 'node':
+      return document.nodes.find(({ id }) => id === reference.id)?.name
+    case 'mesh':
+      return document.meshes.find(({ id }) => id === reference.id)?.name
+    case 'material':
+      return document.materials.find(({ id }) => id === reference.id)?.name
+    case 'texture':
+      return document.textures.find(({ id }) => id === reference.id)?.name
+    case 'animation':
+      return document.animations.find(({ id }) => id === reference.id)?.name
+  }
 }
 
 function ValidationDescription({ result }: { result: GltfValidationResult }) {
@@ -37,9 +57,7 @@ function ValidationDescription({ result }: { result: GltfValidationResult }) {
         onJump={(name) =>
           jumpTo({ kind: reference.kind, id: reference.id }, name)
         }
-        nodeName={snapshot.document?.nodes.find(
-          (node) => node.id === reference.id,
-        )?.name}
+        name={referenceName(snapshot.document, reference)}
       />,
     )
     cursor = index + reference.label.length
@@ -51,21 +69,21 @@ function ValidationDescription({ result }: { result: GltfValidationResult }) {
 
 function ValidationReferenceLink({
   reference,
-  nodeName,
+  name,
   onJump,
 }: {
   reference: GltfValidationReference
-  nodeName: string | undefined
+  name: string | undefined
   onJump: (name: string) => void
 }) {
-  if (!nodeName) return reference.label
+  if (!name) return reference.label
 
   return (
     <Button
       variant="link"
       className="h-auto p-0 align-baseline font-mono text-sm font-normal text-foreground underline"
-      onClick={() => onJump(nodeName)}
-      aria-label={`Inspect node ${reference.label}`}
+      onClick={() => onJump(name)}
+      aria-label={`Inspect ${reference.kind} ${reference.label}`}
     >
       {reference.label}
     </Button>
@@ -121,6 +139,9 @@ function ValidationList({ issues }: { issues: GltfValidationResult[] }) {
 
   return (
     <div>
+      <div className="flex border-b bg-muted/50 px-2 py-1">
+        <ValidationSchemaEditor />
+      </div>
       <ValidationSection type="error" results={errors} />
       <ValidationSection type="warning" results={warnings} />
     </div>

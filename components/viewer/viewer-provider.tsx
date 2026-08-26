@@ -9,6 +9,7 @@ import {
   type ModelTransform,
   type ViewerSnapshot,
 } from '@/lib/viz/viewer'
+import type { GltfValidationSchema } from '@/lib/viz/validation-schema'
 
 import { EXAMPLE_MODEL } from './example-model'
 import { formatSharePath } from './share-path'
@@ -47,6 +48,10 @@ interface ViewerContextValue {
   select: (selection: Selection | null) => void
   searchOpen: boolean
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  validationSchema: GltfValidationSchema | null
+  setValidationSchema: React.Dispatch<
+    React.SetStateAction<GltfValidationSchema | null>
+  >
 }
 
 const ViewerContext = React.createContext<ViewerContextValue | null>(null)
@@ -71,6 +76,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
+  const [validationSchema, setValidationSchema] =
+    React.useState<GltfValidationSchema | null>(null)
   // source URL of the active model, or null when loaded from local files —
   // lets the UI credit the bundled example while it's on screen
   const [source, setSource] = React.useState<string | null>(null)
@@ -99,6 +106,10 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     viewer ? () => viewer.getSnapshot() : getEmptySnapshot,
     getEmptySnapshot
   )
+
+  React.useEffect(() => {
+    viewer?.setValidationSchema(validationSchema)
+  }, [viewer, validationSchema])
 
   // A viewport ⌘-click frames + highlights the mesh in the engine on its
   // own; mirror it into the React UI so the sidebar selection and ?path stay
@@ -207,6 +218,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       select,
       searchOpen,
       setSearchOpen,
+      validationSchema,
+      setValidationSchema,
     }),
     [
       viewer,
@@ -222,6 +235,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       sidebarOpen,
       selection,
       searchOpen,
+      validationSchema,
     ]
   )
 

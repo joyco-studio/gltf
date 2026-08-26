@@ -1,6 +1,10 @@
 import { fetchGlbJson } from '@/lib/viz/fetch-glb-json'
 import { parseGlbJson } from '@/lib/viz/parse-glb'
 import { validateGltf, type GltfValidationResult } from '@/lib/viz/validate'
+import {
+  parseGltfValidationSchema,
+  type GltfValidationSchema,
+} from '@/lib/viz/validation-schema'
 
 const JSON_CONTENT_TYPES = new Set(['application/json', 'model/gltf+json'])
 const GLB_CONTENT_TYPES = new Set([
@@ -20,6 +24,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function readSchema(source: Record<string, unknown>) {
+  if (!('schema' in source)) {
+    return { ok: true as const, schema: undefined }
+  }
+
+  const parsed = parseGltfValidationSchema(source.schema)
+  return parsed.ok
+    ? { ok: true as const, schema: parsed.schema }
+    : {
+        ok: false as const,
+        response: requestError(
+          'Invalid validation schema',
+          parsed.errors.join(' ')
+        ),
+      }
+}
+
+function results(source: unknown, schema?: GltfValidationSchema) {
+  return json(validateGltf(source, schema))
+}
+
 async function validateJsonRequest(request: Request) {
   let source: unknown
 
@@ -33,6 +58,9 @@ async function validateJsonRequest(request: Request) {
   }
 
   if (isRecord(source) && 'url' in source) {
+    const parsedSchema = readSchema(source)
+    if (!parsedSchema.ok) return parsedSchema.response
+
     if (typeof source.url !== 'string' || !source.url) {
       return requestError(
         'Invalid remote GLB URL',
@@ -42,11 +70,18 @@ async function validateJsonRequest(request: Request) {
 
     const remote = await fetchGlbJson(source.url)
     return remote.ok
-      ? json(validateGltf(remote.json))
+      ? results(remote.json, parsedSchema.schema)
       : requestError(remote.title, remote.description, remote.status)
   }
 
-  return json(validateGltf(source))
+  if (isRecord(source) && 'document' in source) {
+    const parsedSchema = readSchema(source)
+    return parsedSchema.ok
+      ? results(source.document, parsedSchema.schema)
+      : parsedSchema.response
+  }
+
+  return results(source)
 }
 
 async function validateRequest(request: Request) {
