@@ -1,6 +1,8 @@
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import type { Texture } from 'three/webgpu'
 
+import { validateGltf, type GltfValidationIssue } from './validate'
+
 /**
  * Normalized, UI-friendly snapshot of a glTF document. Built once per load
  * from the raw glTF JSON (via GLTFLoader's parser) so the React layer never
@@ -90,6 +92,7 @@ interface GltfDocumentInfo {
   materials: GltfMaterialInfo[]
   textures: GltfTextureInfo[]
   animations: GltfAnimationInfo[]
+  validationIssues: GltfValidationIssue[]
 }
 
 /* ------------------------------- glTF JSON ------------------------------- */
@@ -575,6 +578,7 @@ async function inspectGltf(
     materials,
     textures,
     animations: buildAnimationInfos(json),
+    validationIssues: validateGltf(json),
   }
 }
 

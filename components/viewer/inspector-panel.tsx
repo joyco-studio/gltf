@@ -18,6 +18,7 @@ import { AnimationsTable } from "./animations-table";
 import { HierarchyTable } from "./hierarchy-table";
 import { MaterialsTable } from "./materials-table";
 import { TexturesGrid } from "./textures-grid";
+import { ValidationList } from "./validation-list";
 import { useViewer, type InspectorTab } from "./viewer-provider";
 
 function SectionTitle({
@@ -173,6 +174,12 @@ function InspectorPanel() {
                 </Badge>
               </TabsTrigger>
             ) : null}
+            <TabsTrigger value="validation" className="h-8">
+              Validation
+              <Badge variant="muted" size="sm">
+                {document.validationIssues.length}
+              </Badge>
+            </TabsTrigger>
           </TabsList>
 
           <Tooltip>
@@ -213,6 +220,12 @@ function InspectorPanel() {
         <TabsContent value="animations" className="min-h-0">
           <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <AnimationsTable animations={document.animations} />
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="validation" className="min-h-0">
+          <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
+            <ValidationList issues={document.validationIssues} />
           </ScrollArea>
         </TabsContent>
       </Tabs>
