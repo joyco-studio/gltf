@@ -1,5 +1,11 @@
+import { Suspense } from "react";
+
 import { ViewerApp } from "@/components/viewer/viewer-app";
 
 export default function Home() {
-  return <ViewerApp />;
+  return (
+    <Suspense>
+      <ViewerApp />
+    </Suspense>
+  );
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { parseAsStringLiteral, useQueryState } from 'nuqs'
 
 import {
   EMPTY_SNAPSHOT,
@@ -12,7 +13,13 @@ import {
 import { EXAMPLE_MODEL } from './example-model'
 import { formatSharePath } from './share-path'
 
-type InspectorTab = 'contents' | 'textures' | 'animations' | 'validation'
+const INSPECTOR_TABS = [
+  'contents',
+  'textures',
+  'animations',
+  'validation',
+] as const
+type InspectorTab = (typeof INSPECTOR_TABS)[number]
 
 interface Selection {
   kind: 'mesh' | 'material' | 'texture' | 'animation'
@@ -57,7 +64,10 @@ const getEmptySnapshot = () => EMPTY_SNAPSHOT
 
 function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [viewer, setViewer] = React.useState<Viewer | null>(null)
-  const [tab, setTab] = React.useState<InspectorTab>('contents')
+  const [tab, setTab] = useQueryState(
+    'tab',
+    parseAsStringLiteral(INSPECTOR_TABS).withDefault('contents')
+  )
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
@@ -103,7 +113,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       params.set('path', formatSharePath(kind, name))
       window.history.replaceState(null, '', `?${params}`)
     })
-  }, [viewer])
+  }, [viewer, setTab])
 
   const openFiles = React.useCallback(
     (files: File[]) => {
@@ -174,7 +184,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       params.set('path', formatSharePath(selection.kind, name))
       window.history.replaceState(null, '', `?${params}`)
     },
-    [viewer]
+    [viewer, setTab]
   )
 
   const value = React.useMemo(
@@ -206,6 +216,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       source,
       jumpTo,
       tab,
+      setTab,
       sidebarOpen,
       selection,
       searchOpen,
