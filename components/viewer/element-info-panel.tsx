@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Box, Group, ListTree } from 'lucide-react'
+import { Box, Group } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -139,29 +139,25 @@ function ElementInfoPanel() {
       align="stretch"
       className="absolute top-0 right-4 z-50 w-80 max-w-[calc(100%-2rem)]"
     >
-      <div className="flex h-8 items-center gap-2 bg-background/85 px-2 backdrop-blur-md">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={`Show ${inspecting.name} in hierarchy`}
+        className="pointer-events-auto h-8 w-full justify-start gap-2 rounded-none bg-background/85 px-2 backdrop-blur-md"
+        onClick={() => revealInHierarchy(hierarchySelection)}
+      >
         {inspecting.kind === 'node' ? (
           <Group className="size-3.5 shrink-0 text-muted-foreground" />
         ) : (
           <Box className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <h2 className="truncate font-mono text-xs font-medium">
+        <span className="truncate font-mono text-xs font-medium">
           {inspecting.name}
-        </h2>
+        </span>
         <Filler />
         <Badge variant="muted" size="sm">
           {inspecting.kind} #{inspecting.id}
         </Badge>
-      </div>
-
-      <Button
-        variant="accent"
-        size="sm"
-        className="pointer-events-auto w-full rounded-none"
-        onClick={() => revealInHierarchy(hierarchySelection)}
-      >
-        <ListTree />
-        Show in hierarchy
       </Button>
 
       {inspecting.kind === 'mesh' && instances && instances > 1 ? (
