@@ -106,8 +106,8 @@ function DataTable<Row>({
   // collapse state; it returns when selection moves elsewhere.
   const visibleCollapsed = React.useMemo(() => {
     if (!tree || !selectedId) return collapsed;
-    const selectedIndex = sorted.findIndex(
-      (row) => rowId(row) === selectedId,
+    const selectedIndex = sorted.findIndex((row) =>
+      isSelected ? isSelected(row) : rowId(row) === selectedId,
     );
     if (selectedIndex < 0) return collapsed;
 
@@ -122,7 +122,7 @@ function DataTable<Row>({
     }
 
     return next;
-  }, [collapsed, selectedId, sorted, rowId, tree]);
+  }, [collapsed, selectedId, sorted, rowId, isSelected, tree]);
 
   // Walk the DFS list, dropping every row that sits under a collapsed ancestor.
   const visibleRows = React.useMemo(() => {
