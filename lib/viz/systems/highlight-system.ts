@@ -139,8 +139,12 @@ class HighlightSystem implements System {
 
     // the renderer's own classic→node conversion (property copy); node
     // materials come back as-is, so clone those before augmenting
-    const library = this.viewer.render.renderer.library
-    let nodeMaterial = library.fromMaterial(material) as NodeMaterial | null
+    // `fromMaterial` exists in Three.js, but is missing from @types/three's
+    // otherwise-empty NodeLibrary declaration.
+    const library = this.viewer.render.renderer.library as unknown as {
+      fromMaterial(material: Material): NodeMaterial | null
+    }
+    let nodeMaterial = library.fromMaterial(material)
     if (!nodeMaterial) return material
     if (nodeMaterial === (material as unknown as NodeMaterial)) {
       nodeMaterial = nodeMaterial.clone()
