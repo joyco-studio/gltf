@@ -42,7 +42,12 @@
           ]
         },
         "value": true,
-        "flags": { "type": "string" },
+        "flags": {
+          "type": "string",
+          "pattern": "^[imsu]*$",
+          "maxLength": 4,
+          "description": "Linear-time regular expression flags: case-insensitive (i), multiline (m), dot-all (s), and Unicode (u)."
+        },
         "level": { "enum": ["error", "warning"], "default": "error" },
         "title": { "type": "string" },
         "message": { "type": "string" }
@@ -77,7 +82,15 @@
         },
         {
           "if": { "properties": { "operator": { "const": "matches" } } },
-          "then": { "properties": { "value": { "type": "string" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "maxLength": 256,
+                "description": "A linear-time RE2-compatible regular expression."
+              }
+            }
+          },
           "else": { "not": { "required": ["flags"] } }
         },
         {

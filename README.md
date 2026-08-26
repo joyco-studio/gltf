@@ -123,7 +123,9 @@ of meshes with multiple primitives. Version 1 supports these operators:
 - `includesAll` and `includesAny` with a non-empty array value
 - `unique` (no value)
 - `equals` and `notEquals` with any JSON value
-- `matches` with a regular-expression string and optional `flags`
+- `matches` with a linear-time, RE2-compatible regular-expression string of up
+  to 256 characters and optional `i`, `m`, `s`, or `u` flags. Backreferences
+  and lookaround assertions are not supported.
 - `lessThan`, `lessThanOrEqual`, `greaterThan`, and `greaterThanOrEqual` with a
   numeric value
 

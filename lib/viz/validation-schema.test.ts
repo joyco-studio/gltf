@@ -48,6 +48,33 @@ describe('parseGltfValidationSchema', () => {
       assert.ok(parsed.errors.some((error) => error.includes('regular expression')))
     }
   })
+
+  it('rejects regex syntax and flags that cannot run in linear time', () => {
+    const parsed = parseGltfValidationSchema({
+      version: 1,
+      rules: [
+        {
+          id: 'backreference',
+          path: '$.meshes[*].name',
+          operator: 'matches',
+          value: '(mesh)\\1',
+        },
+        {
+          id: 'unsupported-flags',
+          path: '$.meshes[*].name',
+          operator: 'matches',
+          value: 'mesh',
+          flags: 'g',
+        },
+      ],
+    })
+
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) {
+      assert.ok(parsed.errors.some((error) => error.includes('invalid escape sequence')))
+      assert.ok(parsed.errors.some((error) => error.includes('only the “i”, “m”, “s”, and “u”')))
+    }
+  })
 })
 
 describe('custom glTF validation', () => {
@@ -187,6 +214,25 @@ describe('custom glTF validation', () => {
       { kind: 'mesh', id: 1, label: '#1' },
       { kind: 'mesh', id: 2, label: '#2' },
     ])
+  })
+
+  it('evaluates nested quantifiers without catastrophic backtracking', () => {
+    const poisonedName = `${'a'.repeat(10_000)}!`
+    const results = validateGltf(
+      { meshes: [{ name: poisonedName }] },
+      schema([
+        {
+          id: 'safe-regex',
+          path: '$.meshes[*].name',
+          operator: 'matches',
+          value: '(a+)+$',
+          level: 'error',
+        },
+      ])
+    )
+
+    assert.equal(results.length, 1)
+    assert.equal(results[0].ruleId, 'safe-regex')
   })
 
   it('reports resolved values when none match an allowed list', () => {

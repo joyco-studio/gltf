@@ -1,5 +1,6 @@
 import { exec, type JsonValue, type Path } from 'jsonpath-rfc9535'
 import parseJsonPath from 'jsonpath-rfc9535/parser'
+import { RE2JS } from 're2js'
 
 import type {
   GltfValidationReference,
@@ -9,6 +10,13 @@ import type {
 
 const VALIDATION_SCHEMA_VERSION = 1 as const
 const MAX_REPORTED_VALUES = 5
+const MAX_REGEX_LENGTH = 256
+const REGEX_FLAGS = {
+  i: RE2JS.CASE_INSENSITIVE,
+  m: RE2JS.MULTILINE,
+  s: RE2JS.DOTALL,
+  u: 0,
+} as const
 
 const OPERATORS = [
   'exists',
@@ -170,6 +178,25 @@ function isValidJsonPath(path: string) {
   }
 }
 
+function compileRegex(pattern: string, flags = '') {
+  if (pattern.length > MAX_REGEX_LENGTH) {
+    throw new Error(`patterns cannot exceed ${MAX_REGEX_LENGTH} characters`)
+  }
+
+  let compiledFlags = 0
+  const seenFlags = new Set<string>()
+  for (const flag of flags) {
+    if (!(flag in REGEX_FLAGS)) {
+      throw new Error('only the “i”, “m”, “s”, and “u” flags are supported')
+    }
+    if (seenFlags.has(flag)) throw new Error(`flag “${flag}” cannot be repeated`)
+    seenFlags.add(flag)
+    compiledFlags |= REGEX_FLAGS[flag as keyof typeof REGEX_FLAGS]
+  }
+
+  return RE2JS.compile(RE2JS.translateRegExp(pattern), compiledFlags)
+}
+
 function referenceForPath(segments: Path): GltfValidationReference | undefined {
   const kind = REFERENCE_KINDS[segments[0] as keyof typeof REFERENCE_KINDS]
   const id = segments[1]
@@ -283,9 +310,14 @@ function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult
           errors.push(`${prefix} operator “matches” requires a string “value”.`)
         } else {
           try {
-            new RegExp(candidate.value, candidate.flags as string | undefined)
-          } catch {
-            errors.push(`${prefix} operator “matches” contains an invalid regular expression.`)
+            compileRegex(
+              candidate.value,
+              typeof candidate.flags === 'string' ? candidate.flags : ''
+            )
+          } catch (error) {
+            errors.push(
+              `${prefix} operator “matches” contains an unsupported regular expression: ${error instanceof Error ? error.message : String(error)}.`
+            )
           }
         }
         if (candidate.flags !== undefined && typeof candidate.flags !== 'string') {
@@ -405,11 +437,10 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
           }
     }
     case 'matches': {
-      const expression = new RegExp(expected as string, rule.flags)
-      const failures = matches.filter(({ value }) => {
-        expression.lastIndex = 0
-        return typeof value !== 'string' || !expression.test(value)
-      })
+      const expression = compileRegex(expected as string, rule.flags)
+      const failures = matches.filter(
+        ({ value }) => typeof value !== 'string' || !expression.test(value)
+      )
       return failures.length === 0 && matches.length > 0
         ? null
         : {
