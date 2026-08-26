@@ -18,19 +18,21 @@ import { ViewerProvider, useViewer } from "./viewer-provider";
 /**
  * Consumes the initial deep link: loads `?url=` once the viewer is attached,
  * then jumps to `?path=` (e.g. `materials.mat_1`) once that document is parsed.
+ * The active `?tab=` is owned by nuqs in ViewerProvider; it is captured here
+ * only so an explicit tab wins while restoring a path.
  *
- * The URL is read *once* (at first load) and is purely an output afterwards —
- * openUrl/openFiles/jumpTo rewrite it, but those rewrites must never feed back
- * here as a reload. So the load effect is a one-shot guarded by `startedRef`,
- * not a reaction to live searchParams.
+ * The model URL and selection path are read *once* at first load; later writes
+ * from openUrl/openFiles/jumpTo must not feed back here as a reload. The tab is
+ * intentionally live so direct links and browser navigation update the UI.
  */
 function UrlParamLoader() {
-  const { viewer, snapshot, openUrl, jumpTo } = useViewer();
+  const { viewer, snapshot, openUrl, jumpTo, tab, setTab } = useViewer();
   const searchParams = useSearchParams();
   const startedRef = React.useRef(false);
   // captured at first load, before openUrl clears ?path; applied to the first
   // parsed document only (a later paste must not re-jump to the deep-link path)
   const initialPathRef = React.useRef<string | null>(null);
+  const initialTabRef = React.useRef<typeof tab | null>(null);
   const jumpedDocRef = React.useRef<typeof snapshot.document>(null);
 
   React.useEffect(() => {
@@ -41,24 +43,31 @@ function UrlParamLoader() {
     const url = parseHttpUrl(searchParams.get("url") ?? "");
     if (!url) return;
     initialPathRef.current = searchParams.get("path");
+    initialTabRef.current = searchParams.get("tab") === tab ? tab : null;
     // honour the example's placement when shared via ?url=
     const transform =
       url === EXAMPLE_MODEL.url
         ? { position: EXAMPLE_MODEL.position, scale: EXAMPLE_MODEL.scale }
         : undefined;
     openUrl(url, transform);
-  }, [viewer, searchParams, openUrl]);
+  }, [viewer, searchParams, tab, openUrl]);
 
   React.useEffect(() => {
     const { document } = snapshot;
     if (!document || jumpedDocRef.current === document) return;
     jumpedDocRef.current = document;
     const path = initialPathRef.current;
+    const initialTab = initialTabRef.current;
     initialPathRef.current = null; // deep-link path applies to the first model
+    initialTabRef.current = null;
     if (!path) return;
     const resolved = resolveSharePath(document, path);
-    if (resolved) jumpTo(resolved.selection, resolved.name);
-  }, [snapshot, jumpTo]);
+    if (!resolved) return;
+    jumpTo(resolved.selection, resolved.name);
+    // `path` selects an entity and its natural tab, but an explicit `tab`
+    // represents what the sharer actually had open and therefore wins.
+    if (initialTab) setTab(initialTab);
+  }, [snapshot, jumpTo, setTab]);
 
   return null;
 }
