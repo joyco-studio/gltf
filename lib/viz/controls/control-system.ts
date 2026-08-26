@@ -15,7 +15,7 @@ import {
 } from './types'
 
 interface InspectTarget {
-  kind: 'mesh' | 'material' | 'texture'
+  kind: 'node' | 'mesh' | 'material' | 'texture'
   id: number
   name: string
 }

@@ -190,10 +190,14 @@ class HighlightSystem implements System {
       ? new Set(model.getMeshesForTarget(hovered))
       : null
 
-    // only material/texture inspects narrow which primitives light up; a mesh
-    // inspect — the common case — lights every primitive, so it needs no filter
+    // only material/texture inspects narrow which primitives light up; node
+    // and mesh inspects light every primitive under their resolved target
     const inspectFilter =
-      inspecting && inspecting.kind !== 'mesh' ? inspecting : null
+      inspecting &&
+      inspecting.kind !== 'node' &&
+      inspecting.kind !== 'mesh'
+        ? inspecting
+        : null
     const matchesInspect = (material: Material) =>
       inspectFilter === null
         ? true

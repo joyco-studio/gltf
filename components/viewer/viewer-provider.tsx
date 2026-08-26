@@ -22,7 +22,7 @@ const INSPECTOR_TABS = [
 type InspectorTab = (typeof INSPECTOR_TABS)[number]
 
 interface Selection {
-  kind: 'mesh' | 'material' | 'texture' | 'animation'
+  kind: 'node' | 'mesh' | 'material' | 'texture' | 'animation'
   id: number
 }
 
@@ -110,7 +110,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       setTab('contents')
       select({ kind, id })
       const params = new URLSearchParams(window.location.search)
-      params.set('path', formatSharePath(kind, name))
+      params.set('path', formatSharePath({ kind, id }, name))
       window.history.replaceState(null, '', `?${params}`)
     })
   }, [viewer, setTab])
@@ -165,7 +165,9 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       // show it in the sidebar (re-opening it if collapsed)...
       setSidebarOpen(true)
       setTab(
-        selection.kind === 'texture'
+        selection.kind === 'node' || selection.kind === 'mesh'
+          ? 'contents'
+          : selection.kind === 'texture'
           ? 'textures'
           : selection.kind === 'animation'
             ? 'animations'
@@ -181,7 +183,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       }
       // reflect the spot in the URL (?path=materials.mat_1) so it's shareable
       const params = new URLSearchParams(window.location.search)
-      params.set('path', formatSharePath(selection.kind, name))
+      params.set('path', formatSharePath(selection, name))
       window.history.replaceState(null, '', `?${params}`)
     },
     [viewer, setTab]
