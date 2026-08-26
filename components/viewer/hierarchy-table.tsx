@@ -4,7 +4,11 @@ import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { formatBytes, formatNumber } from "@/lib/format";
-import type { GltfMeshInfo, GltfNodeInfo } from "@/lib/viz/inspect";
+import type {
+  GltfMeshInfo,
+  GltfNodeInfo,
+  GltfNodeType,
+} from "@/lib/viz/inspect";
 
 import { DataTable, type ColumnDef } from "./data-table";
 import { useViewer } from "./viewer-provider";
@@ -14,11 +18,32 @@ interface NodeRow extends GltfNodeInfo {
   mesh: GltfMeshInfo | null;
 }
 
+const TYPE_LABELS: Record<GltfNodeType, string> = {
+  mesh: "Mesh",
+  "skinned-mesh": "Skinned mesh",
+  "instanced-mesh": "Instanced mesh",
+  camera: "Camera",
+  light: "Light",
+  joint: "Joint",
+  group: "Group",
+  empty: "Empty",
+};
+
 const columns: ColumnDef<NodeRow>[] = [
   {
     key: "name",
     header: "Name",
     cell: (node) => <span className="text-foreground">{node.name}</span>,
+  },
+  {
+    key: "type",
+    header: "Type",
+    cell: (node) => (
+      <Badge variant="muted" size="sm">
+        {TYPE_LABELS[node.objectType]}
+      </Badge>
+    ),
+    sortValue: (node) => TYPE_LABELS[node.objectType],
   },
   {
     key: "mode",

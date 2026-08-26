@@ -24,6 +24,16 @@ interface GltfMeshInfo {
   materialNames: string[]
 }
 
+type GltfNodeType =
+  | 'mesh'
+  | 'skinned-mesh'
+  | 'instanced-mesh'
+  | 'camera'
+  | 'light'
+  | 'joint'
+  | 'group'
+  | 'empty'
+
 /**
  * One node of the scene graph, flattened into a depth-first list. `depth` and
  * `hasChildren` are all the tree view needs to render indentation and toggles;
@@ -35,6 +45,7 @@ interface GltfNodeInfo {
   kind: 'node'
   id: number
   name: string
+  objectType: GltfNodeType
   depth: number
   hasChildren: boolean
   meshId: number | null
@@ -110,6 +121,18 @@ interface GltfJsonPrimitive {
   mode?: number
 }
 
+interface GltfJsonNode {
+  name?: string
+  mesh?: number
+  skin?: number
+  camera?: number
+  children?: number[]
+  extensions?: {
+    EXT_mesh_gpu_instancing?: { attributes?: Record<string, number> }
+    KHR_lights_punctual?: { light?: number }
+  }
+}
+
 interface GltfJson {
   accessors?: GltfJsonAccessor[]
   meshes?: { name?: string; primitives: GltfJsonPrimitive[] }[]
@@ -126,14 +149,8 @@ interface GltfJson {
     bufferView?: number
   }[]
   bufferViews?: { byteLength: number }[]
-  nodes?: {
-    name?: string
-    mesh?: number
-    children?: number[]
-    extensions?: {
-      EXT_mesh_gpu_instancing?: { attributes?: Record<string, number> }
-    }
-  }[]
+  nodes?: GltfJsonNode[]
+  skins?: { joints?: number[] }[]
   scene?: number
   scenes?: { name?: string; nodes?: number[] }[]
   animations?: {
@@ -311,6 +328,9 @@ function buildNodeInfos(
 ): GltfNodeInfo[] {
   const nodes = json.nodes ?? []
   if (nodes.length === 0) return []
+  const jointIds = new Set(
+    (json.skins ?? []).flatMap(({ joints }) => joints ?? [])
+  )
 
   const scene = json.scenes?.[json.scene ?? 0]
   const roots =
@@ -341,6 +361,7 @@ function buildNodeInfos(
         node.name?.trim() ||
         (meshId !== null ? meshes[meshId]?.name : undefined) ||
         `node_${index}`,
+      objectType: classifyNode(node, index, jointIds),
       depth,
       hasChildren: children.length > 0,
       meshId,
@@ -351,6 +372,20 @@ function buildNodeInfos(
 
   for (const root of roots) visit(root, 0)
   return list
+}
+
+function classifyNode(
+  node: GltfJsonNode,
+  index: number,
+  jointIds: Set<number>
+): GltfNodeType {
+  if (node.extensions?.EXT_mesh_gpu_instancing) return 'instanced-mesh'
+  if (node.mesh !== undefined && node.skin !== undefined) return 'skinned-mesh'
+  if (node.mesh !== undefined) return 'mesh'
+  if (node.camera !== undefined) return 'camera'
+  if (node.extensions?.KHR_lights_punctual?.light !== undefined) return 'light'
+  if (jointIds.has(index)) return 'joint'
+  return node.children?.length ? 'group' : 'empty'
 }
 
 function buildMaterialInfos(json: GltfJson, meshes: GltfMeshInfo[]) {
@@ -586,6 +621,7 @@ export { inspectGltf }
 export type {
   GltfDocumentInfo,
   GltfNodeInfo,
+  GltfNodeType,
   GltfMeshInfo,
   GltfMaterialInfo,
   GltfTextureInfo,
