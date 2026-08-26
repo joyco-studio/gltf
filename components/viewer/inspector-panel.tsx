@@ -146,7 +146,7 @@ function InspectorPanel() {
   return (
     <aside
       ref={asideRef}
-      className="pointer-events-auto absolute top-0 bottom-4 left-4 z-40 flex max-w-[calc(100%-2rem)] flex-col border bg-background/85 backdrop-blur-md"
+      className="@container/sidebar pointer-events-auto absolute top-0 bottom-4 left-4 z-40 flex max-w-[calc(100%-2rem)] flex-col border bg-background/85 backdrop-blur-md"
       style={{ width }}
     >
       <Tabs
@@ -156,27 +156,51 @@ function InspectorPanel() {
       >
         {/* tight header: no padding, same h-8 rhythm as the app header */}
         <div className="flex h-8 items-center justify-between border-b">
-          <TabsList className="h-8 gap-0">
-            <TabsTrigger value="contents" className="h-8">
+          <TabsList className="h-8 min-w-0 flex-1 gap-0">
+            <TabsTrigger
+              value="contents"
+              className="h-8 @max-[520px]/sidebar:px-1"
+            >
               Instances
             </TabsTrigger>
-            <TabsTrigger value="textures" className="h-8">
+            <TabsTrigger
+              value="textures"
+              className="h-8 @max-[520px]/sidebar:px-1"
+            >
               Textures
-              <Badge variant="muted" size="sm">
+              <Badge
+                variant="muted"
+                size="sm"
+                className="@max-[520px]/sidebar:hidden"
+              >
                 {document.textures.length}
               </Badge>
             </TabsTrigger>
             {document.animations.length > 0 ? (
-              <TabsTrigger value="animations" className="h-8">
+              <TabsTrigger
+                value="animations"
+                className="h-8 @max-[520px]/sidebar:px-1"
+              >
                 Animations
-                <Badge variant="muted" size="sm">
+                <Badge
+                  variant="muted"
+                  size="sm"
+                  className="@max-[520px]/sidebar:hidden"
+                >
                   {document.animations.length}
                 </Badge>
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value="validation" className="h-8">
+            <TabsTrigger
+              value="validation"
+              className="h-8 @max-[520px]/sidebar:px-1"
+            >
               Validation
-              <Badge variant="muted" size="sm">
+              <Badge
+                variant="muted"
+                size="sm"
+                className="@max-[520px]/sidebar:hidden"
+              >
                 {document.validationIssues.length}
               </Badge>
             </TabsTrigger>
