@@ -4,30 +4,16 @@ import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { formatBytes, formatNumber } from "@/lib/format";
-import type {
-  GltfMeshInfo,
-  GltfNodeInfo,
-  GltfNodeType,
-} from "@/lib/viz/inspect";
+import type { GltfMeshInfo, GltfNodeInfo } from "@/lib/viz/inspect";
 
 import { DataTable, type ColumnDef } from "./data-table";
+import { NODE_TYPE_LABELS } from "./node-type";
 import { useViewer } from "./viewer-provider";
 
 /** A scene node joined to its mesh's stats (null for transform/group nodes). */
 interface NodeRow extends GltfNodeInfo {
   mesh: GltfMeshInfo | null;
 }
-
-const TYPE_LABELS: Record<GltfNodeType, string> = {
-  mesh: "Mesh",
-  "skinned-mesh": "Skinned mesh",
-  "instanced-mesh": "Instanced mesh",
-  camera: "Camera",
-  light: "Light",
-  joint: "Joint",
-  group: "Group",
-  empty: "Empty",
-};
 
 const columns: ColumnDef<NodeRow>[] = [
   {
@@ -40,10 +26,10 @@ const columns: ColumnDef<NodeRow>[] = [
     header: "Type",
     cell: (node) => (
       <Badge variant="muted" size="sm">
-        {TYPE_LABELS[node.objectType]}
+        {NODE_TYPE_LABELS[node.objectType]}
       </Badge>
     ),
-    sortValue: (node) => TYPE_LABELS[node.objectType],
+    sortValue: (node) => NODE_TYPE_LABELS[node.objectType],
   },
   {
     key: "mode",

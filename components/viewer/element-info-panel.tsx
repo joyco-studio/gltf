@@ -14,6 +14,7 @@ import type {
 import type { InspectTarget } from '@/lib/viz/controls/control-system'
 
 import { useControlsState } from './viz-hooks'
+import { NODE_TYPE_LABELS } from './node-type'
 import { useViewer, type HierarchySelection } from './viewer-provider'
 
 const AXES = ['X', 'Y', 'Z'] as const
@@ -128,6 +129,11 @@ function ElementInfoPanel() {
       ? snapshot.document.meshes.find(({ id }) => id === inspecting.id)
           ?.instances
       : undefined
+  const objectType =
+    inspecting.kind === 'node'
+      ? snapshot.document.nodes.find(({ id }) => id === inspecting.id)
+          ?.objectType
+      : undefined
   const hierarchySelection: HierarchySelection = {
     kind: inspecting.kind,
     id: inspecting.id,
@@ -151,10 +157,15 @@ function ElementInfoPanel() {
         ) : (
           <Box className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="truncate font-mono text-xs font-medium">
+        <span className="min-w-0 truncate font-mono text-xs font-medium">
           {inspecting.name}
         </span>
         <Filler />
+        {objectType ? (
+          <Badge variant="accent" size="sm">
+            {NODE_TYPE_LABELS[objectType]}
+          </Badge>
+        ) : null}
         <Badge variant="muted" size="sm">
           {inspecting.kind} #{inspecting.id}
         </Badge>
