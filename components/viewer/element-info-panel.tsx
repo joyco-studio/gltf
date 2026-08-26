@@ -1,9 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { Box, Group } from 'lucide-react'
+import { Box, Group, ListTree } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Cluster, Filler } from '@/components/ui/cluster'
 import type {
   ElementTransform,
@@ -13,7 +14,7 @@ import type {
 import type { InspectTarget } from '@/lib/viz/controls/control-system'
 
 import { useControlsState } from './viz-hooks'
-import { useViewer } from './viewer-provider'
+import { useViewer, type HierarchySelection } from './viewer-provider'
 
 const AXES = ['X', 'Y', 'Z'] as const
 const REFRESH_INTERVAL = 100
@@ -109,7 +110,7 @@ function useElementTransform(target: InspectTarget | null) {
 
 /** Floating read-only transform inspector for the inspected scene element. */
 function ElementInfoPanel() {
-  const { snapshot } = useViewer()
+  const { revealInHierarchy, snapshot } = useViewer()
   const inspecting = useControlsState().inspecting
   const transform = useElementTransform(inspecting)
 
@@ -127,6 +128,10 @@ function ElementInfoPanel() {
       ? snapshot.document.meshes.find(({ id }) => id === inspecting.id)
           ?.instances
       : undefined
+  const hierarchySelection: HierarchySelection = {
+    kind: inspecting.kind,
+    id: inspecting.id,
+  }
 
   return (
     <Cluster
@@ -148,6 +153,16 @@ function ElementInfoPanel() {
           {inspecting.kind} #{inspecting.id}
         </Badge>
       </div>
+
+      <Button
+        variant="accent"
+        size="sm"
+        className="pointer-events-auto w-full rounded-none"
+        onClick={() => revealInHierarchy(hierarchySelection)}
+      >
+        <ListTree />
+        Show in hierarchy
+      </Button>
 
       {inspecting.kind === 'mesh' && instances && instances > 1 ? (
         <p className="bg-accent/85 px-3 py-2 font-mono text-[10px] text-muted-foreground backdrop-blur-md">

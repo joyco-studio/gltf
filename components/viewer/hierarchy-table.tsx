@@ -94,7 +94,7 @@ function HierarchyTable({
   nodes: GltfNodeInfo[];
   meshes: GltfMeshInfo[];
 }) {
-  const { selection, select, setTab } = useViewer();
+  const { hierarchyRevealRequest, selection, select, setTab } = useViewer();
 
   const rows = React.useMemo<NodeRow[]>(() => {
     const meshById = new Map(meshes.map((mesh) => [mesh.id, mesh]));
@@ -114,8 +114,13 @@ function HierarchyTable({
         hasChildren: (node) => node.hasChildren,
       }}
       selectedId={
-        selection?.kind === "node" ? `node-${selection.id}` : null
+        selection?.kind === "node"
+          ? `node-${selection.id}`
+          : selection?.kind === "mesh"
+            ? `mesh-${selection.id}`
+            : null
       }
+      scrollRequest={hierarchyRevealRequest}
       isSelected={(node) =>
         selection?.kind === "node"
           ? node.id === selection.id

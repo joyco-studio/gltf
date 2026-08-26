@@ -62,6 +62,7 @@ function DataTable<Row>({
   columns,
   rowId,
   selectedId,
+  scrollRequest,
   isSelected,
   onRowClick,
   inspectRow,
@@ -71,6 +72,8 @@ function DataTable<Row>({
   columns: ColumnDef<Row>[];
   rowId: (row: Row) => string;
   selectedId?: string | null;
+  /** Changing this value repeats the selected-row scroll. */
+  scrollRequest?: number;
   /** Custom selection test — overrides `selectedId` when a row id can't carry
    * the selection (e.g. several nodes sharing one mesh in tree mode). */
   isSelected?: (row: Row) => boolean;
@@ -168,7 +171,7 @@ function DataTable<Row>({
     if (selectedId && selectedVisible) {
       selectedRowRef.current?.scrollIntoView({ block: "center" });
     }
-  }, [selectedId, selectedVisible]);
+  }, [selectedId, selectedVisible, scrollRequest]);
 
   return (
     <Table>
