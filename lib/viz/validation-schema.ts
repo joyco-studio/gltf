@@ -8,6 +8,7 @@ import type {
 } from './validate'
 
 const VALIDATION_SCHEMA_VERSION = 1 as const
+const MAX_REPORTED_VALUES = 5
 
 const OPERATORS = [
   'exists',
@@ -130,6 +131,15 @@ function formatValue(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function formatResolvedValues(matches: ResolvedValue[]): string {
+  const reported = matches.slice(0, MAX_REPORTED_VALUES).map(({ value, reference }) => {
+    const location = reference ? ` (${reference.kind} ${reference.label})` : ''
+    return `${formatValue(value)}${location}`
+  })
+  const remaining = matches.length - reported.length
+  return `${reported.join(', ')}${remaining > 0 ? `, and ${remaining} more` : ''}`
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
@@ -330,7 +340,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
         : {
             description: expected
               ? `Path “${rule.path}” did not resolve any values.`
-              : `Path “${rule.path}” resolved ${matches.length} value${matches.length === 1 ? '' : 's'} but should not exist.`,
+              : `Path “${rule.path}” resolved ${matches.length} value${matches.length === 1 ? '' : 's'} but should not exist: ${formatResolvedValues(matches)}.`,
             matches,
           }
     }
@@ -356,7 +366,8 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
       )
         ? null
         : {
-            description: `Path “${rule.path}” must include at least one of: ${(expected as unknown[]).map(formatValue).join(', ')}.`,
+            description: `Path “${rule.path}” must include at least one of: ${(expected as unknown[]).map(formatValue).join(', ')}.${matches.length > 0 ? ` Resolved values: ${formatResolvedValues(matches)}.` : ' It did not resolve any values.'}`,
+            matches,
           }
     case 'unique': {
       const duplicates = matches.filter((match, index) =>
@@ -368,7 +379,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
       return duplicates.length === 0
         ? null
         : {
-            description: `Path “${rule.path}” contains duplicate value${duplicates.length === 1 ? '' : 's'}: ${[...new Set(duplicates.map(({ value }) => formatValue(value)))].join(', ')}.`,
+            description: `Path “${rule.path}” contains duplicate values: ${formatResolvedValues(duplicates)}.`,
             matches: duplicates,
           }
     }
@@ -380,7 +391,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
             description:
               matches.length === 0
                 ? `Path “${rule.path}” did not resolve any values to compare.`
-                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that do not equal ${formatValue(expected)}.`,
+                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that do not equal ${formatValue(expected)}: ${formatResolvedValues(failures)}.`,
             matches: failures,
           }
     }
@@ -389,7 +400,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
       return failures.length === 0
         ? null
         : {
-            description: `Path “${rule.path}” has ${failures.length} forbidden value${failures.length === 1 ? '' : 's'} equal to ${formatValue(expected)}.`,
+            description: `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} equal to forbidden ${formatValue(expected)}: ${formatResolvedValues(failures)}.`,
             matches: failures,
           }
     }
@@ -405,7 +416,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
             description:
               matches.length === 0
                 ? `Path “${rule.path}” did not resolve any strings to match.`
-                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that do not match /${expected}/${rule.flags ?? ''}.`,
+                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that do not match /${expected}/${rule.flags ?? ''}: ${formatResolvedValues(failures)}.`,
             matches: failures,
           }
     }
@@ -428,7 +439,7 @@ function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleF
             description:
               matches.length === 0
                 ? `Path “${rule.path}” did not resolve any numbers to compare.`
-                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that fail “${rule.operator} ${expected}”.`,
+                : `Path “${rule.path}” has ${failures.length} value${failures.length === 1 ? '' : 's'} that fail “${rule.operator} ${expected}”: ${formatResolvedValues(failures)}.`,
             matches: failures,
           }
     }

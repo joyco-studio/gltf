@@ -154,6 +154,59 @@ describe('custom glTF validation', () => {
     assert.deepEqual(results[2].references, [
       { kind: 'mesh', id: 1, label: '#1' },
     ])
+    assert.match(results[1].description, /“part_bad” \(mesh #0\)/)
+    assert.match(results[1].description, /“part_bad” \(mesh #2\)/)
+    assert.match(results[2].description, /“other” \(mesh #1\)/)
+    assert.match(results[3].description, /150/)
+  })
+
+  it('identifies exact values that fail list-based rules', () => {
+    const results = validateGltf(
+      {
+        meshes: [
+          { name: 'Body' },
+          { name: 'Front Wheel' },
+          { name: 'Rear Wheel' },
+        ],
+      },
+      schema([
+        {
+          id: 'mesh-name-format',
+          path: '$.meshes[*].name',
+          operator: 'matches',
+          value: '^\\S+$',
+          level: 'error',
+        },
+      ])
+    )
+
+    assert.equal(results.length, 1)
+    assert.match(results[0].description, /“Front Wheel” \(mesh #1\)/)
+    assert.match(results[0].description, /“Rear Wheel” \(mesh #2\)/)
+    assert.deepEqual(results[0].references, [
+      { kind: 'mesh', id: 1, label: '#1' },
+      { kind: 'mesh', id: 2, label: '#2' },
+    ])
+  })
+
+  it('reports resolved values when none match an allowed list', () => {
+    const results = validateGltf(
+      { materials: [{ alphaMode: 'BLEND' }] },
+      schema([
+        {
+          id: 'supported-alpha-mode',
+          path: '$.materials[*].alphaMode',
+          operator: 'includesAny',
+          value: ['OPAQUE', 'MASK'],
+          level: 'error',
+        },
+      ])
+    )
+
+    assert.match(results[0].description, /Resolved values: “BLEND” \(material #0\)/)
+    assert.deepEqual(results[0].references, [
+      { kind: 'material', id: 0, label: '#0' },
+    ])
   })
 
   it('supports existence, equality, inclusion, and every comparison direction', () => {
