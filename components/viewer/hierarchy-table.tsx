@@ -7,6 +7,7 @@ import { formatBytes, formatNumber } from "@/lib/format";
 import type { GltfMeshInfo, GltfNodeInfo } from "@/lib/viz/inspect";
 
 import { DataTable, type ColumnDef } from "./data-table";
+import { NODE_TYPE_LABELS } from "./node-type";
 import { useViewer } from "./viewer-provider";
 
 /** A scene node joined to its mesh's stats (null for transform/group nodes). */
@@ -19,6 +20,16 @@ const columns: ColumnDef<NodeRow>[] = [
     key: "name",
     header: "Name",
     cell: (node) => <span className="text-foreground">{node.name}</span>,
+  },
+  {
+    key: "type",
+    header: "Type",
+    cell: (node) => (
+      <Badge variant="muted" size="sm">
+        {NODE_TYPE_LABELS[node.objectType]}
+      </Badge>
+    ),
+    sortValue: (node) => NODE_TYPE_LABELS[node.objectType],
   },
   {
     key: "mode",
@@ -85,7 +96,7 @@ const columns: ColumnDef<NodeRow>[] = [
  * The scene graph as a collapsible outliner. Each row is a node, indented by
  * depth; nodes that reference a mesh carry its stats, transform/group nodes
  * render as empty parent rows. Rows select the exact glTF node so transform
- * information stays instance-specific; viewport picking remains mesh-based.
+ * information stays instance-specific, matching viewport picking.
  */
 function HierarchyTable({
   nodes,

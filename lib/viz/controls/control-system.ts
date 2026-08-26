@@ -187,16 +187,19 @@ class ControlSystem
 
   /**
    * Enter inspection: orbit the given item, focus its world box and fit the
-   * camera to an inspect radius computed from the item's own extents.
+   * camera to an inspect radius computed from the item's own extents. A
+   * transform-only node has no box, so it enters inspection without moving.
    */
-  inspect(target: InspectTarget, box: Box3) {
+  inspect(target: InspectTarget, box: Box3 | null) {
     this.setMode('orbit')
     // Keep the current viewing angle (Blender's Frame Selected) — the user
     // already has a clear sightline to the item; just recenter and fit. The
     // dolly cap is intentionally left as the whole-model guard from frame(),
     // so inspecting a small part doesn't trap the camera inside larger geometry.
-    this.moveToBox(box, this.currentDirection(), INSPECT_MARGIN)
-    this.active.syncWithCamera()
+    if (box) {
+      this.moveToBox(box, this.currentDirection(), INSPECT_MARGIN)
+      this.active.syncWithCamera()
+    }
     this.inspecting = target
     this.publish()
   }

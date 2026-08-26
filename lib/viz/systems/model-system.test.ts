@@ -4,6 +4,41 @@ import { BoxGeometry, Group, Mesh } from 'three/webgpu'
 
 import { ModelSystem } from './model-system'
 
+describe('ModelSystem.getNodeTargetForObject', () => {
+  it('resolves a primitive hit to its owning glTF node', () => {
+    const root = new Group()
+    const node = new Group()
+    const primitive = new Mesh(new BoxGeometry())
+    node.add(primitive)
+    root.add(node)
+
+    const associations = new Map<object, Record<string, number>>([
+      [node, { meshes: 3, nodes: 7 }],
+      [primitive, { meshes: 3, primitives: 0 }],
+    ])
+    const model = new ModelSystem()
+    model.current = {
+      root,
+      fileName: 'test.gltf',
+      gltf: {
+        parser: {
+          associations,
+          json: {
+            meshes: [{}, {}, {}, { name: 'shared_mesh' }],
+            nodes: [{}, {}, {}, {}, {}, {}, {}, { mesh: 3 }],
+          },
+        },
+      },
+    } as unknown as NonNullable<ModelSystem['current']>
+
+    assert.deepEqual(model.getNodeTargetForObject(primitive), {
+      kind: 'node',
+      id: 7,
+      name: 'shared_mesh',
+    })
+  })
+})
+
 describe('ModelSystem.getElementTransformInfo', () => {
   it('reports local and composed world transforms for an exact glTF node', () => {
     const root = new Group()

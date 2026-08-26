@@ -189,6 +189,7 @@ class HighlightSystem implements System {
     const preview = hovered
       ? new Set(model.getMeshesForTarget(hovered))
       : null
+    const hasInspectionFocus = focused !== null && focused.size > 0
 
     // only material/texture inspects narrow which primitives light up; node
     // and mesh inspects light every primitive under their resolved target
@@ -214,7 +215,7 @@ class HighlightSystem implements System {
       } else if (preview?.has(mesh)) {
         // a hovered pick preview always lights up whole
         mesh.material = this.highlight(original, () => true)
-      } else if (inspecting) {
+      } else if (hasInspectionFocus) {
         // something is framed → everything else recedes into context
         mesh.material = this.ghost
       } else {

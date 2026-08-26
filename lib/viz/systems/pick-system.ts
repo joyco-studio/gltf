@@ -4,17 +4,12 @@ import type { InspectTarget } from '../controls/control-system'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
-interface PickHit {
-  id: number
-  name: string
-}
-
 /**
  * Direct picking in the viewport: while ⌘ (Cmd) is held, the mesh under the
  * cursor lights up as a preview (HighlightSystem), and clicking it inspects
- * it — the same effect as picking it from the ⌘K search or the contents
- * table. The currently inspected mesh is intentionally skipped, so the
- * gesture only ever moves focus to *other* meshes.
+ * its exact owning node — the same effect as picking that instance from the
+ * hierarchy. The currently inspected node is intentionally skipped, so the
+ * gesture only ever moves focus to *other* nodes.
  *
  * Raycasting is gated behind ⌘ so it never competes with plain orbit/fly
  * navigation, and only runs on actual pointer movement (or when ⌘ is first
@@ -49,7 +44,10 @@ class PickSystem implements System {
   }
 
   /** Resolve the frontmost glTF mesh under a viewport point, if any. */
-  private pickAt(clientX: number, clientY: number): PickHit | null {
+  private pickAt(
+    clientX: number,
+    clientY: number
+  ): (InspectTarget & { kind: 'node' }) | null {
     const model = this.viewer.model
     const meshes = model.getAllMeshes()
     if (meshes.length === 0) return null
@@ -61,18 +59,18 @@ class PickSystem implements System {
     )
     this.raycaster.setFromCamera(this.pointer, this.viewer.camera.camera)
 
-    // sorted near→far; the first hit that maps to a document mesh wins
+    // sorted near→far; the first hit that maps to a document node wins
     for (const hit of this.raycaster.intersectObjects(meshes, false)) {
-      const id = model.getMeshIdForObject(hit.object)
-      if (id !== undefined) return { id, name: model.getMeshName(id) }
+      const target = model.getNodeTargetForObject(hit.object)
+      if (target) return target
     }
     return null
   }
 
-  /** glTF mesh currently framed for inspection, if it is a mesh target. */
-  private get inspectedMeshId(): number | null {
+  /** glTF node currently framed for inspection, if it is a node target. */
+  private get inspectedNodeId(): number | null {
     const inspecting = this.viewer.controls.getSnapshot().inspecting
-    return inspecting?.kind === 'mesh' ? inspecting.id : null
+    return inspecting?.kind === 'node' ? inspecting.id : null
   }
 
   /** Re-evaluate the hover preview against the last known cursor position. */
@@ -83,21 +81,18 @@ class PickSystem implements System {
     }
 
     const pick = this.pickAt(this.last.x, this.last.y)
-    // never preview the mesh that's already framed — ⌘-hover only ever
-    // points at *other* meshes to switch to
+    // never preview the node that's already framed — ⌘-hover only ever
+    // points at another node to switch to
     const target =
-      pick && pick.id !== this.inspectedMeshId ? pick : null
+      pick && pick.id !== this.inspectedNodeId ? pick : null
 
     this.setHover(target)
     this.canvas.style.cursor = target ? 'pointer' : ''
   }
 
-  private setHover(hit: PickHit | null) {
-    const next: InspectTarget | null = hit
-      ? { kind: 'mesh', id: hit.id, name: hit.name }
-      : null
-    this.hovered = next
-    this.viewer.highlight.setHovered(next)
+  private setHover(target: InspectTarget | null) {
+    this.hovered = target
+    this.viewer.highlight.setHovered(target)
   }
 
   private clearHover() {
@@ -118,13 +113,13 @@ class PickSystem implements System {
     this.metaActive = true
 
     const pick = this.pickAt(event.clientX, event.clientY)
-    if (!pick || pick.id === this.inspectedMeshId) return
+    if (!pick || pick.id === this.inspectedNodeId) return
 
     // claim the gesture: this is an inspect, not the start of an orbit drag
     event.preventDefault()
     this.clearHover()
-    this.viewer.inspectItem('mesh', pick.id, pick.name)
-    this.viewer.emit('pick', { kind: 'mesh', id: pick.id, name: pick.name })
+    this.viewer.inspectItem(pick.kind, pick.id, pick.name)
+    this.viewer.emit('pick', pick)
   }
 
   private onPointerLeave = () => {
