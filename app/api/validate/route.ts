@@ -74,36 +74,17 @@ async function validateRequest(request: Request) {
   return validateJsonRequest(request)
 }
 
-function withCors(response: Response, request: Request) {
-  const origin = request.headers.get('origin')
-
-  if (!origin) return response
-
-  try {
-    const url = new URL(origin)
-    if (
-      url.origin !== origin ||
-      url.protocol !== 'https:' ||
-      url.port ||
-      !url.hostname.endsWith('.joyco.studio')
-    ) {
-      return response
-    }
-  } catch {
-    return response
-  }
-
-  response.headers.set('Access-Control-Allow-Origin', origin)
+function withCors(response: Response) {
+  response.headers.set('Access-Control-Allow-Origin', '*')
   response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
-  response.headers.append('Vary', 'Origin')
   return response
 }
 
 export async function POST(request: Request) {
-  return withCors(await validateRequest(request), request)
+  return withCors(await validateRequest(request))
 }
 
-export function OPTIONS(request: Request) {
-  return withCors(new Response(null, { status: 204 }), request)
+export function OPTIONS() {
+  return withCors(new Response(null, { status: 204 }))
 }

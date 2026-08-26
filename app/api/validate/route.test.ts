@@ -3,13 +3,11 @@ import { describe, it } from 'node:test'
 
 import { OPTIONS, POST } from './route'
 
-const ALLOWED_ORIGIN = 'https://consumer.joyco.studio'
-
-function request(method: 'OPTIONS' | 'POST', origin: string) {
+function request(method: 'OPTIONS' | 'POST', origin?: string) {
   return new Request('https://gltf.joyco.studio/api/validate', {
     method,
     headers: {
-      Origin: origin,
+      ...(origin && { Origin: origin }),
       ...(method === 'POST' && { 'Content-Type': 'application/json' }),
     },
     ...(method === 'POST' && {
@@ -18,8 +16,8 @@ function request(method: 'OPTIONS' | 'POST', origin: string) {
   })
 }
 
-function assertCorsHeaders(response: Response, origin = ALLOWED_ORIGIN) {
-  assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin)
+function assertCorsHeaders(response: Response) {
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*')
   assert.equal(
     response.headers.get('Access-Control-Allow-Methods'),
     'POST, OPTIONS'
@@ -28,19 +26,19 @@ function assertCorsHeaders(response: Response, origin = ALLOWED_ORIGIN) {
     response.headers.get('Access-Control-Allow-Headers'),
     'Content-Type'
   )
-  assert.match(response.headers.get('Vary') ?? '', /\bOrigin\b/)
+  assert.equal(response.headers.get('Vary'), null)
 }
 
 describe('/api/validate CORS', () => {
   it('answers preflight requests', () => {
-    const response = OPTIONS(request('OPTIONS', ALLOWED_ORIGIN))
+    const response = OPTIONS()
 
     assert.equal(response.status, 204)
     assertCorsHeaders(response)
   })
 
   it('includes CORS headers on POST responses', async () => {
-    const response = await POST(request('POST', ALLOWED_ORIGIN))
+    const response = await POST(request('POST', 'https://example.com'))
 
     assert.equal(response.status, 200)
     assertCorsHeaders(response)
@@ -51,7 +49,7 @@ describe('/api/validate CORS', () => {
       new Request('https://gltf.joyco.studio/api/validate', {
         method: 'POST',
         headers: {
-          Origin: ALLOWED_ORIGIN,
+          Origin: 'https://example.com',
           'Content-Type': 'text/plain',
         },
         body: 'not glTF',
@@ -62,17 +60,24 @@ describe('/api/validate CORS', () => {
     assertCorsHeaders(response)
   })
 
-  it('does not allow unrelated or lookalike origins', () => {
+  it('allows every origin with the same wildcard response', async () => {
     for (const origin of [
       'https://example.com',
       'https://joyco.studio',
       'https://consumer.joyco.studio.example.com',
       'http://consumer.joyco.studio',
     ]) {
-      const response = OPTIONS(request('OPTIONS', origin))
+      const response = await POST(request('POST', origin))
 
-      assert.equal(response.status, 204)
-      assert.equal(response.headers.get('Access-Control-Allow-Origin'), null)
+      assert.equal(response.status, 200)
+      assertCorsHeaders(response)
     }
+  })
+
+  it('returns wildcard CORS even when Origin is absent', async () => {
+    const response = await POST(request('POST'))
+
+    assert.equal(response.status, 200)
+    assertCorsHeaders(response)
   })
 })
