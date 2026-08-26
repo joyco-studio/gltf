@@ -49,6 +49,7 @@ describe('ModelSystem.getElementTransformInfo', () => {
     node.position.set(1, 2, 3)
     node.rotation.set(0, Math.PI / 2, 0)
     node.scale.set(0.5, 1, 2)
+    node.userData = { category: 'structure', nested: { floor: 2 } }
     root.add(node)
 
     const associations = new Map([[node, { nodes: 7 }]])
@@ -70,6 +71,10 @@ describe('ModelSystem.getElementTransformInfo', () => {
     assert.ok(Math.abs(info.world.scale[1] - 2) < 1e-10)
     assert.ok(Math.abs(info.world.scale[2] - 4) < 1e-10)
     assert.equal(info.bounds, null)
+    assert.deepEqual(info.userData, {
+      category: 'structure',
+      nested: { floor: 2 },
+    })
     assert.equal(info.renderables, 0)
   })
 
@@ -94,6 +99,8 @@ describe('ModelSystem.getElementTransformInfo', () => {
     const second = new Mesh(new BoxGeometry(2, 2, 2))
     first.position.set(-2, 0, 0)
     second.position.set(2, 0, 0)
+    first.userData = { source: 'first-runtime-mesh' }
+    second.userData = { source: 'second-runtime-mesh' }
     root.add(first, second)
 
     const associations = new Map([
@@ -114,6 +121,7 @@ describe('ModelSystem.getElementTransformInfo', () => {
     assert.deepEqual(info.world.position, [-2, 0, 0])
     assert.deepEqual(info.bounds?.center, [0, 0, 0])
     assert.deepEqual(info.bounds?.size, [6, 2, 2])
+    assert.deepEqual(info.userData, { source: 'first-runtime-mesh' })
     assert.equal(info.renderables, 2)
   })
 })

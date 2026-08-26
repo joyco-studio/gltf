@@ -55,6 +55,8 @@ interface ElementTransformInfo {
   local: ElementTransform | null
   world: ElementTransform
   bounds: { center: Vector3Tuple; size: Vector3Tuple } | null
+  /** Custom metadata attached to the representative runtime object. */
+  userData: Record<string, unknown>
   /** Number of runtime mesh primitives represented by this selection. */
   renderables: number
 }
@@ -334,6 +336,7 @@ class ModelSystem implements System {
             size: tuple(box.getSize(new Vector3())),
           }
         : null,
+      userData: object.userData,
       renderables: renderables.length,
     }
   }

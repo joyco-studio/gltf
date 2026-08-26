@@ -70,6 +70,40 @@ function TransformSection({
   )
 }
 
+function UserDataSection({ userData }: { userData: Record<string, unknown> }) {
+  if (Object.keys(userData).length === 0) return null
+
+  let formatted: string
+  try {
+    formatted = JSON.stringify(userData, null, 2)
+  } catch {
+    formatted = '[Unable to display non-serializable user data]'
+  }
+
+  return (
+    <section className="pointer-events-auto flex min-h-0 flex-col bg-background/85 px-3 py-2 font-mono text-[10px] backdrop-blur-md">
+      <h3 className="mb-1 shrink-0 text-xs font-medium uppercase tracking-wide">
+        User data
+      </h3>
+      <pre className="max-h-64 min-h-0 overflow-auto whitespace-pre-wrap break-all text-muted-foreground">
+        {formatted}
+      </pre>
+    </section>
+  )
+}
+
+function transformsEqual(
+  current: ElementTransformInfo | null,
+  next: ElementTransformInfo | null
+) {
+  if (!current || !next) return current === next
+  return (
+    current.renderables === next.renderables &&
+    JSON.stringify([current.local, current.world, current.bounds]) ===
+      JSON.stringify([next.local, next.world, next.bounds])
+  )
+}
+
 function useElementTransform(target: InspectTarget | null) {
   const { viewer } = useViewer()
   const [state, setState] = React.useState<{
@@ -92,7 +126,7 @@ function useElementTransform(target: InspectTarget | null) {
       const next = viewer.model.getElementTransformInfo(element)
       setState((current) =>
         current?.key === targetKey &&
-        JSON.stringify(current.info) === JSON.stringify(next)
+        transformsEqual(current.info, next)
           ? current
           : { key: targetKey, info: next }
       )
@@ -109,7 +143,7 @@ function useElementTransform(target: InspectTarget | null) {
   return state?.key === key ? state.info : null
 }
 
-/** Floating read-only transform inspector for the inspected scene element. */
+/** Floating read-only details inspector for the inspected scene element. */
 function ElementInfoPanel() {
   const { revealInHierarchy, snapshot } = useViewer()
   const inspecting = useControlsState().inspecting
@@ -143,7 +177,7 @@ function ElementInfoPanel() {
     <Cluster
       direction="col"
       align="stretch"
-      className="absolute top-0 right-4 z-50 w-80 max-w-[calc(100%-2rem)]"
+      className="absolute top-0 right-4 z-50 max-h-full w-80 max-w-[calc(100%-2rem)]"
     >
       <Button
         variant="ghost"
@@ -196,6 +230,8 @@ function ElementInfoPanel() {
           <VectorRow label="Size" value={transform.bounds.size} />
         </section>
       ) : null}
+
+      <UserDataSection userData={transform.userData} />
     </Cluster>
   )
 }
