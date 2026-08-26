@@ -49,7 +49,7 @@ async function validateJsonRequest(request: Request) {
   return json(validateGltf(source))
 }
 
-export async function POST(request: Request) {
+async function validateRequest(request: Request) {
   const contentType = request.headers
     .get('content-type')
     ?.split(';', 1)[0]
@@ -72,4 +72,38 @@ export async function POST(request: Request) {
   }
 
   return validateJsonRequest(request)
+}
+
+function withCors(response: Response, request: Request) {
+  const origin = request.headers.get('origin')
+
+  if (!origin) return response
+
+  try {
+    const url = new URL(origin)
+    if (
+      url.origin !== origin ||
+      url.protocol !== 'https:' ||
+      url.port ||
+      !url.hostname.endsWith('.joyco.studio')
+    ) {
+      return response
+    }
+  } catch {
+    return response
+  }
+
+  response.headers.set('Access-Control-Allow-Origin', origin)
+  response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  response.headers.append('Vary', 'Origin')
+  return response
+}
+
+export async function POST(request: Request) {
+  return withCors(await validateRequest(request), request)
+}
+
+export function OPTIONS(request: Request) {
+  return withCors(new Response(null, { status: 204 }), request)
 }
