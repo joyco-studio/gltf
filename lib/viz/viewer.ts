@@ -138,22 +138,27 @@ class Viewer extends EventEmitter<ViewerEvents> {
   /**
    * Frame a glTF entity for close inspection: a node or mesh directly, a
    * material via every mesh using it, a texture via every mesh whose
-   * materials sample it. Clears an earlier inspection when nothing renderable
-   * resolves, keeping runtime state aligned with the sidebar selection.
+   * materials sample it. Transform-only nodes remain inspectable without
+   * moving the camera; invalid or non-renderable resource targets clear an
+   * earlier inspection.
    */
   inspectItem(
     kind: 'node' | 'mesh' | 'material' | 'texture',
     id: number,
     name: string
   ) {
-    const meshes = this.model.getMeshesForTarget({ kind, id, name })
+    const target = { kind, id, name }
+    const meshes = this.model.getMeshesForTarget(target)
 
     const box = this.model.getWorldBoxOfMeshes(meshes)
-    if (!box) {
+    if (
+      !box &&
+      (kind !== 'node' || !this.model.getElementTransformInfo({ kind, id }))
+    ) {
       this.controls.exitInspect()
       return
     }
-    this.controls.inspect({ kind, id, name }, box)
+    this.controls.inspect(target, box)
   }
 
   async loadFiles(files: File[]) {
