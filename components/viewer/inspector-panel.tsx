@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  ScrollAreaContent,
+  ScrollAreaViewport,
+} from "@/components/scroll-area";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -146,7 +150,7 @@ function InspectorPanel() {
   return (
     <aside
       ref={asideRef}
-      className="@container/sidebar pointer-events-auto absolute top-0 bottom-4 left-4 z-40 flex max-w-[calc(100%-2rem)] flex-col border bg-background/85 backdrop-blur-md"
+      className="pointer-events-auto absolute top-0 bottom-4 left-4 z-40 flex max-w-[calc(100%-2rem)] flex-col border bg-background/85 backdrop-blur-md"
       style={{ width }}
     >
       <Tabs
@@ -155,56 +159,39 @@ function InspectorPanel() {
         className="flex min-h-0 flex-1 flex-col"
       >
         {/* tight header: no padding, same h-8 rhythm as the app header */}
-        <div className="flex h-8 items-center justify-between border-b">
-          <TabsList className="h-8 min-w-0 flex-1 gap-0">
-            <TabsTrigger
-              value="contents"
-              className="h-8 @max-[520px]/sidebar:px-1"
-            >
-              Instances
-            </TabsTrigger>
-            <TabsTrigger
-              value="textures"
-              className="h-8 @max-[520px]/sidebar:px-1"
-            >
-              Textures
-              <Badge
-                variant="muted"
-                size="sm"
-                className="@max-[520px]/sidebar:hidden"
-              >
-                {document.textures.length}
-              </Badge>
-            </TabsTrigger>
-            {document.animations.length > 0 ? (
-              <TabsTrigger
-                value="animations"
-                className="h-8 @max-[520px]/sidebar:px-1"
-              >
-                Animations
-                <Badge
-                  variant="muted"
-                  size="sm"
-                  className="@max-[520px]/sidebar:hidden"
-                >
-                  {document.animations.length}
-                </Badge>
-              </TabsTrigger>
-            ) : null}
-            <TabsTrigger
-              value="validation"
-              className="h-8 @max-[520px]/sidebar:px-1"
-            >
-              Validation
-              <Badge
-                variant="muted"
-                size="sm"
-                className="@max-[520px]/sidebar:hidden"
-              >
-                {document.validationIssues.length}
-              </Badge>
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex h-8 items-center border-b">
+          <ScrollAreaViewport
+            orientation="horizontal"
+            className="min-w-0 flex-1"
+          >
+            <ScrollAreaContent className="h-8">
+              <TabsList className="h-8 gap-0">
+                <TabsTrigger value="contents" className="h-8">
+                  Instances
+                </TabsTrigger>
+                <TabsTrigger value="textures" className="h-8">
+                  Textures
+                  <Badge variant="muted" size="sm">
+                    {document.textures.length}
+                  </Badge>
+                </TabsTrigger>
+                {document.animations.length > 0 ? (
+                  <TabsTrigger value="animations" className="h-8">
+                    Animations
+                    <Badge variant="muted" size="sm">
+                      {document.animations.length}
+                    </Badge>
+                  </TabsTrigger>
+                ) : null}
+                <TabsTrigger value="validation" className="h-8">
+                  Validation
+                  <Badge variant="muted" size="sm">
+                    {document.validationIssues.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </ScrollAreaContent>
+          </ScrollAreaViewport>
 
           <Tooltip>
             <TooltipTrigger asChild>
