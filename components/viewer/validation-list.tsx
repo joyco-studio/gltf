@@ -63,7 +63,7 @@ function ValidationReferenceLink({
   return (
     <Button
       variant="link"
-      className="h-auto p-0 align-baseline font-mono text-sm font-normal"
+      className="h-auto p-0 align-baseline font-mono text-sm font-normal text-foreground underline"
       onClick={() => onJump(nodeName)}
       aria-label={`Inspect node ${reference.label}`}
     >
