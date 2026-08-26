@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Braces, FileUp, Trash2 } from 'lucide-react'
+import { Braces, FileUp, LoaderCircle, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { fetchValidationSchema } from '@/lib/viz/fetch-validation-schema'
 import {
   EXAMPLE_VALIDATION_SCHEMA,
   parseGltfValidationSchema,
@@ -32,6 +34,8 @@ function ValidationSchemaEditor() {
   const [draft, setDraft] = React.useState(() =>
     formatSchema(EXAMPLE_VALIDATION_SCHEMA)
   )
+  const [schemaUrl, setSchemaUrl] = React.useState('')
+  const [loadingUrl, setLoadingUrl] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -39,6 +43,8 @@ function ValidationSchemaEditor() {
     setOpen(nextOpen)
     if (nextOpen) {
       setDraft(formatSchema(validationSchema ?? EXAMPLE_VALIDATION_SCHEMA))
+      setSchemaUrl('')
+      setLoadingUrl(false)
       setError(null)
     }
   }
@@ -72,6 +78,20 @@ function ValidationSchemaEditor() {
     }
   }
 
+  const importUrl = async () => {
+    setLoadingUrl(true)
+    setError(null)
+    const result = await fetchValidationSchema(schemaUrl)
+    setLoadingUrl(false)
+
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+
+    setDraft(result.text)
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -89,11 +109,35 @@ function ValidationSchemaEditor() {
         <DialogHeader>
           <DialogTitle>Custom validation schema</DialogTitle>
           <DialogDescription>
-            Paste or upload a version 1 schema. Paths use RFC 9535 JSONPath,
-            such as <code>$.meshes[*].name</code>. Custom findings join the
-            built-in errors and warnings.
+            Paste, upload, or load a version 1 schema from a URL. Paths use RFC
+            9535 JSONPath, such as <code>$.meshes[*].name</code>. Custom
+            findings join the built-in errors and warnings.
           </DialogDescription>
         </DialogHeader>
+
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void importUrl()
+          }}
+        >
+          <Input
+            type="url"
+            value={schemaUrl}
+            onChange={(event) => {
+              setSchemaUrl(event.target.value)
+              setError(null)
+            }}
+            aria-label="Validation schema URL"
+            placeholder="https://example.com/validation-schema.json"
+            disabled={loadingUrl}
+          />
+          <Button type="submit" variant="secondary" disabled={loadingUrl}>
+            {loadingUrl ? <LoaderCircle className="animate-spin" /> : null}
+            {loadingUrl ? 'Loading' : 'Load URL'}
+          </Button>
+        </form>
 
         <Textarea
           value={draft}
@@ -141,7 +185,9 @@ function ValidationSchemaEditor() {
             <FileUp />
             Upload JSON
           </Button>
-          <Button onClick={apply}>Apply schema</Button>
+          <Button onClick={apply} disabled={loadingUrl}>
+            Apply schema
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
