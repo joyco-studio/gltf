@@ -195,7 +195,7 @@ function ValidationSchemaEditor() {
               variant="destructive"
               onClick={() => {
                 setValidationSchema(null)
-                setOpen(false)
+                handleOpenChange(false)
               }}
             >
               <Trash2 />
