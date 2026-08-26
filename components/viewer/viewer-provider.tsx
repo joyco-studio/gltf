@@ -27,6 +27,11 @@ interface Selection {
   id: number
 }
 
+interface HierarchySelection {
+  kind: 'node' | 'mesh'
+  id: number
+}
+
 interface ViewerContextValue {
   viewer: Viewer | null
   snapshot: ViewerSnapshot
@@ -46,6 +51,9 @@ interface ViewerContextValue {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>
   selection: Selection | null
   select: (selection: Selection | null) => void
+  /** Open Instances and scroll the exact node/mesh back into view. */
+  revealInHierarchy: (selection: HierarchySelection) => void
+  hierarchyRevealRequest: number
   searchOpen: boolean
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   validationSchema: GltfValidationSchema | null
@@ -79,6 +87,10 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   )
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
   const [selection, select] = React.useState<Selection | null>(null)
+  const [hierarchyRevealRequest, requestHierarchyReveal] = React.useReducer(
+    (revision: number) => revision + 1,
+    0
+  )
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [validationSchema, setValidationSchemaState] =
     React.useState<GltfValidationSchema | null>(null)
@@ -141,20 +153,28 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
+  const revealInHierarchy = React.useCallback(
+    (selection: HierarchySelection) => {
+      setSidebarOpen(true)
+      setTab('contents')
+      select(selection)
+      requestHierarchyReveal()
+    },
+    [setTab]
+  )
+
   // A viewport ⌘-click frames + highlights the mesh in the engine on its
   // own; mirror it into the React UI so the sidebar selection and ?path stay
   // in step with the ⌘K / table inspect flows.
   React.useEffect(() => {
     if (!viewer) return
     return viewer.on('pick', ({ kind, id, name }) => {
-      setSidebarOpen(true)
-      setTab('contents')
-      select({ kind, id })
+      revealInHierarchy({ kind, id })
       const params = new URLSearchParams(window.location.search)
       params.set('path', formatSharePath({ kind, id }, name))
       window.history.replaceState(null, '', `?${params}`)
     })
-  }, [viewer, setTab])
+  }, [viewer, revealInHierarchy])
 
   const openFiles = React.useCallback(
     (files: File[]) => {
@@ -246,6 +266,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       setSidebarOpen,
       selection,
       select,
+      revealInHierarchy,
+      hierarchyRevealRequest,
       searchOpen,
       setSearchOpen,
       validationSchema,
@@ -267,6 +289,8 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       setTab,
       sidebarOpen,
       selection,
+      revealInHierarchy,
+      hierarchyRevealRequest,
       searchOpen,
       validationSchema,
       validationSchemaError,
@@ -281,4 +305,4 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
 }
 
 export { ViewerProvider, useViewer }
-export type { Selection, InspectorTab }
+export type { HierarchySelection, Selection, InspectorTab }

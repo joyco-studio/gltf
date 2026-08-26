@@ -84,9 +84,8 @@ const columns: ColumnDef<NodeRow>[] = [
 /**
  * The scene graph as a collapsible outliner. Each row is a node, indented by
  * depth; nodes that reference a mesh carry its stats, transform/group nodes
- * render as empty parent rows. Selection stays mesh-based (clicking a node
- * frames its mesh), so every node sharing a mesh highlights together — honest
- * about glTF instancing.
+ * render as empty parent rows. Rows select the exact glTF node so transform
+ * information stays instance-specific; viewport picking remains mesh-based.
  */
 function HierarchyTable({
   nodes,
@@ -95,7 +94,7 @@ function HierarchyTable({
   nodes: GltfNodeInfo[];
   meshes: GltfMeshInfo[];
 }) {
-  const { selection, select, setTab } = useViewer();
+  const { hierarchyRevealRequest, selection, select, setTab } = useViewer();
 
   const rows = React.useMemo<NodeRow[]>(() => {
     const meshById = new Map(meshes.map((mesh) => [mesh.id, mesh]));
@@ -121,24 +120,20 @@ function HierarchyTable({
             ? `mesh-${selection.id}`
             : null
       }
+      scrollRequest={hierarchyRevealRequest}
       isSelected={(node) =>
         selection?.kind === "node"
           ? node.id === selection.id
           : selection?.kind === "mesh" && node.meshId === selection.id
       }
       onRowClick={(node) => {
-        if (node.meshId === null) return;
         setTab("contents");
-        select({ kind: "mesh", id: node.meshId });
+        select({ kind: "node", id: node.id });
       }}
-      inspectRow={(node) =>
-        node.mesh
-          ? {
-              selection: { kind: "mesh", id: node.mesh.id },
-              name: node.mesh.name,
-            }
-          : null
-      }
+      inspectRow={(node) => ({
+        selection: { kind: "node", id: node.id },
+        name: node.name,
+      })}
     />
   );
 }

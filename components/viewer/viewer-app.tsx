@@ -7,6 +7,7 @@ import { fetchValidationSchema } from "@/lib/viz/fetch-validation-schema";
 
 import { ControlsToolbar } from "./controls-toolbar";
 import { EmptyState } from "./empty-state";
+import { ElementInfoPanel } from "./element-info-panel";
 import { EXAMPLE_MODEL } from "./example-model";
 import { FileDropZone, parseHttpUrl } from "./file-drop-zone";
 import { resolveSharePath } from "./share-path";
@@ -152,6 +153,7 @@ function ViewerApp() {
           <div className="relative h-full">
             <EmptyState />
             <InspectorPanel />
+            <ElementInfoPanel />
             <ControlsToolbar />
             <InspectBanner />
             <ModelCredit />
