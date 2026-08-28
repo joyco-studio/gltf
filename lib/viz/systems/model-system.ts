@@ -61,6 +61,11 @@ interface ElementTransformInfo {
   renderables: number
 }
 
+interface ElementWorldTransform {
+  position: Vector3
+  quaternion: Quaternion
+}
+
 function tuple(vector: Vector3): Vector3Tuple {
   return [vector.x, vector.y, vector.z]
 }
@@ -302,6 +307,31 @@ class ModelSystem implements System {
     return match
   }
 
+  /** Runtime object whose origin and orientation represent this element. */
+  private getElementObject(target: {
+    kind: 'node' | 'mesh'
+    id: number
+  }): Object3D | null {
+    return target.kind === 'node'
+      ? this.getNodeObject(target.id)
+      : (this.getMeshObjects(target.id)[0] ?? null)
+  }
+
+  /** Exact world-space origin and orientation of a node or representative mesh. */
+  getElementWorldTransform(target: {
+    kind: 'node' | 'mesh'
+    id: number
+  }): ElementWorldTransform | null {
+    const object = this.getElementObject(target)
+    if (!object) return null
+
+    this.current?.root.updateWorldMatrix(true, true)
+    return {
+      position: object.getWorldPosition(new Vector3()),
+      quaternion: object.getWorldQuaternion(new Quaternion()),
+    }
+  }
+
   /**
    * Read-only transform data for the element details UI. A glTF node has one
    * exact local transform; a mesh is a reusable resource, so its world
@@ -318,10 +348,7 @@ class ModelSystem implements System {
       target.kind === 'node'
         ? this.getMeshesForNode(target.id)
         : this.getMeshObjects(target.id)
-    const object =
-      target.kind === 'node'
-        ? this.getNodeObject(target.id)
-        : (renderables[0] ?? null)
+    const object = this.getElementObject(target)
     if (!object) return null
 
     this.current.root.updateWorldMatrix(true, true)
