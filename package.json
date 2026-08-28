@@ -9,6 +9,8 @@
     "prebuild": "pnpm check:validation-schema",
     "build": "next build --webpack",
     "start": "next start",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
     "lint": "eslint",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit"
@@ -50,6 +52,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

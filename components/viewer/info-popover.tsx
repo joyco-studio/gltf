@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Globe, Info } from "lucide-react";
+import { Globe, History, Info } from "lucide-react";
 import { REVISION } from "three/webgpu";
 
 import { Logo } from "@/components/logo";
@@ -81,6 +81,17 @@ function InfoPopover() {
 
         <div className="flex items-center justify-between px-3 py-2">
           <span className="font-mono text-xs uppercase tracking-wide">
+            Viewer
+          </span>
+          <Badge variant="muted" size="sm">
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+          </Badge>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="font-mono text-xs uppercase tracking-wide">
             Engine
           </span>
           <Badge variant="muted" size="sm">
@@ -88,7 +99,15 @@ function InfoPopover() {
           </Badge>
         </div>
 
+        <Separator />
+
         <div className="flex flex-col p-1">
+          <InfoLink
+            href="https://github.com/joyco-studio/gltf/blob/main/CHANGELOG.md"
+            icon={<History className="size-3.5" />}
+          >
+            Changelog
+          </InfoLink>
           <InfoLink
             href="https://joyco.studio"
             icon={<Globe className="size-3.5" />}

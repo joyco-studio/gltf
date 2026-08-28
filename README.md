@@ -9,6 +9,15 @@ The viewer runs client-side; no files are uploaded.
 
 **Live at [gltf.joyco.studio](https://gltf.joyco.studio/).**
 
+## Versioning
+
+User-facing changes are tracked with [Changesets](https://github.com/changesets/changesets).
+Run `pnpm changeset` in a feature branch and commit the generated file. After
+the branch lands, the release workflow keeps a Version Packages pull request
+up to date; merging it bumps `package.json` and updates [`CHANGELOG.md`](./CHANGELOG.md).
+The viewer reads that package version at build time and displays it in the
+About popover.
+
 ## Features
 
 - **WebGPU viewport** — three.js rendering via `WebGPURenderer`, with a WebGL
