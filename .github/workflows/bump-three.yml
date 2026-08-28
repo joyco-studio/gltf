@@ -57,6 +57,17 @@ jobs:
           # @types/three is bumped to its own latest — it can lag a release behind three.
           pnpm update --latest three @types/three
 
+      - name: Add changeset
+        if: steps.three.outputs.outdated == 'true'
+        run: |
+          cat > .changeset/bump-three.md <<EOF
+          ---
+          "gltf": patch
+          ---
+
+          Update three.js from ${{ steps.three.outputs.current }} to ${{ steps.three.outputs.latest }}.
+          EOF
+
       - name: Create or update bump PR
         if: steps.three.outputs.outdated == 'true'
         uses: peter-evans/create-pull-request@v7
