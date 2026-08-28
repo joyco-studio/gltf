@@ -96,9 +96,9 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     const size = box.getSize(new Vector3())
     const maxSize = Math.max(size.x, size.y, size.z, 0.001)
     const transform =
-      inspecting?.kind === 'node' || inspecting?.kind === 'mesh'
+      inspecting?.kind === 'node'
         ? model.getElementWorldTransform({
-            kind: inspecting.kind,
+            kind: 'node',
             id: inspecting.id,
           })
         : null

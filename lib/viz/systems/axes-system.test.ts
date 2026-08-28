@@ -64,4 +64,53 @@ describe('AxesSystem', () => {
 
     axes.dispose()
   })
+
+  it('anchors multi-instance mesh axes at the aggregate bounds center', () => {
+    const root = new Group()
+    const first = new Mesh(new BoxGeometry(2, 2, 2))
+    const second = new Mesh(new BoxGeometry(2, 2, 2))
+    first.position.set(-5, 0, 0)
+    second.position.set(5, 0, 0)
+    root.add(first, second)
+
+    const model = new ModelSystem()
+    model.current = {
+      root,
+      fileName: 'instanced-mesh.gltf',
+      gltf: {
+        parser: {
+          associations: new Map<object, Record<string, number>>([
+            [first, { meshes: 3 }],
+            [second, { meshes: 3 }],
+          ]),
+        },
+      },
+    } as unknown as NonNullable<ModelSystem['current']>
+
+    let publishInspection: (target: InspectTarget | null) => void = () =>
+      assert.fail('AxesSystem did not subscribe to control changes')
+    const scene = new Scene()
+    const axes = new AxesSystem()
+    axes.init({
+      scene,
+      model,
+      controls: {
+        on: (
+          _event: 'change',
+          listener: (snapshot: { inspecting: InspectTarget | null }) => void
+        ) => {
+          publishInspection = (inspecting) => listener({ inspecting })
+          return () => undefined
+        },
+      },
+    } as unknown as Viewer)
+
+    publishInspection({ kind: 'mesh', id: 3, name: 'instanced-mesh' })
+
+    const helper = scene.getObjectByName('element-axes')
+    assert.ok(helper)
+    assert.deepEqual(helper.position.toArray(), [0, 0, 0])
+
+    axes.dispose()
+  })
 })
