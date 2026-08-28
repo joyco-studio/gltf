@@ -39,9 +39,10 @@ const UP = new Vector3(0, 1, 0)
 
 /**
  * Local-frame axes for the inspected element: an RGB arrow triad anchored at
- * the element's world box center, oriented by its world rotation, so the +Z
- * the camera frames front-on is visible. Event-driven off the inspect state
- * (same pattern as HighlightSystem); the toolbar toggles user visibility.
+ * the element's world-space origin, oriented by its world rotation. Resources
+ * without one exact transform retain the representative bounds behavior.
+ * Event-driven off the inspect state (same pattern as HighlightSystem); the
+ * toolbar toggles user visibility.
  */
 class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   private viewer!: Viewer
@@ -94,9 +95,20 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
 
     const size = box.getSize(new Vector3())
     const maxSize = Math.max(size.x, size.y, size.z, 0.001)
-    this.group.position.copy(box.getCenter(new Vector3()))
+    const transform =
+      inspecting?.kind === 'node' || inspecting?.kind === 'mesh'
+        ? model.getElementWorldTransform({
+            kind: inspecting.kind,
+            id: inspecting.id,
+          })
+        : null
+    this.group.position.copy(
+      transform?.position ?? box.getCenter(new Vector3())
+    )
     this.group.quaternion.copy(
-      model.getWorldOrientationOfMeshes(meshes) ?? new Quaternion()
+      transform?.quaternion ??
+        model.getWorldOrientationOfMeshes(meshes) ??
+        new Quaternion()
     )
     this.group.scale.setScalar(maxSize * LENGTH_FACTOR)
     this.hasTarget = true
