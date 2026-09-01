@@ -1,6 +1,7 @@
-import { Clock, Scene } from 'three/webgpu'
+import { Scene, Timer } from 'three/webgpu'
 
 import { ControlSystem } from './controls/control-system'
+import { Disposer } from './disposer'
 import { AnimationSystem } from './systems/animation-system'
 import { AxesSystem } from './systems/axes-system'
 import { EventEmitter } from './event-emitter'
@@ -63,7 +64,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly animations: AnimationSystem
 
   private systems: System[]
-  private clock = new Clock()
+  private disposer = new Disposer()
+  private timer = new Timer()
   private frameHandle: number | null = null
   private resizeObserver: ResizeObserver
   private snapshot: ViewerSnapshot = EMPTY_SNAPSHOT
@@ -101,7 +103,16 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.animations,
       this.render,
     ]
-    for (const system of this.systems) system.init?.(this)
+
+    // Render is last in update order but must be last to dispose: scene-owned
+    // GPU resources need a live renderer backend while they tear down.
+    this.disposer.add(this.render)
+    for (const system of this.systems) {
+      system.init?.(this)
+      if (system !== this.render) {
+        this.disposer.add(() => system.dispose?.())
+      }
+    }
 
     this.resizeObserver = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
@@ -109,6 +120,9 @@ class Viewer extends EventEmitter<ViewerEvents> {
       for (const system of this.systems) system.resize?.(width, height, dpr)
     })
     this.resizeObserver.observe(canvas.parentElement ?? canvas)
+    this.disposer.add(() => this.resizeObserver.disconnect())
+    this.timer.connect(document)
+    this.disposer.add(this.timer)
   }
 
   getSnapshot(): ViewerSnapshot {
@@ -116,19 +130,21 @@ class Viewer extends EventEmitter<ViewerEvents> {
   }
 
   private setSnapshot(partial: Partial<ViewerSnapshot>) {
+    if (this.disposer.disposed) return
     this.snapshot = { ...this.snapshot, ...partial }
     this.emit('change', this.snapshot)
   }
 
   start() {
     if (this.frameHandle !== null) return
-    this.clock.start()
-    const tick = () => {
+    this.timer.reset()
+    const tick = (timestamp: number) => {
       this.frameHandle = requestAnimationFrame(tick)
-      const dt = this.clock.getDelta()
+      this.timer.update(timestamp)
+      const dt = this.timer.getDelta()
       for (const system of this.systems) system.update?.(dt)
     }
-    tick()
+    this.frameHandle = requestAnimationFrame(tick)
   }
 
   stop() {
@@ -136,7 +152,6 @@ class Viewer extends EventEmitter<ViewerEvents> {
       cancelAnimationFrame(this.frameHandle)
       this.frameHandle = null
     }
-    this.clock.stop()
   }
 
   /**
@@ -189,31 +204,38 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.setSnapshot({ status: 'loading', error: null })
     try {
       const loaded = await loadModel()
-      if (!loaded) return // superseded by a newer load
+      if (!loaded || this.disposer.disposed) return // superseded or unmounted
 
       const source = loaded.gltf.parser.json as unknown
       const document = await inspectGltf(loaded.gltf, loaded.fileName)
+      if (this.disposer.disposed || this.model.current !== loaded) return
       // The schema may have changed while texture inspection was awaiting;
       // derive findings from the latest applied rules at commit time.
       document.validationIssues = validateGltf(source, this.validationSchema)
       this.validationSource = source
       this.setSnapshot({ status: 'ready', document })
     } catch (error) {
+      if (this.disposer.disposed) return
       this.setSnapshot({
         status: this.snapshot.document ? 'ready' : 'error',
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
       // idle showcase only while nothing is loaded
-      this.controls.setIdle(this.snapshot.document === null)
+      if (!this.disposer.disposed) {
+        this.controls.setIdle(this.snapshot.document === null)
+      }
     }
   }
 
   dispose() {
     this.stop()
-    this.resizeObserver.disconnect()
-    for (const system of [...this.systems].reverse()) system.dispose?.()
-    this.clear()
+    try {
+      this.disposer.dispose()
+    } finally {
+      this.scene.clear()
+      this.clear()
+    }
   }
 }
 

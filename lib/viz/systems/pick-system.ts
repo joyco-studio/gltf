@@ -1,6 +1,7 @@
 import { Raycaster, Vector2 } from 'three/webgpu'
 
 import type { InspectTarget } from '../controls/control-system'
+import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
@@ -20,6 +21,7 @@ class PickSystem implements System {
   private readonly canvas: HTMLCanvasElement
   private raycaster = new Raycaster()
   private pointer = new Vector2()
+  private disposer = new Disposer()
 
   /** Last cursor position, so pressing ⌘ can preview without a move. */
   private last: { x: number; y: number } | null = null
@@ -35,12 +37,12 @@ class PickSystem implements System {
   init(viewer: Viewer) {
     this.viewer = viewer
 
-    this.canvas.addEventListener('pointermove', this.onPointerMove)
-    this.canvas.addEventListener('pointerdown', this.onPointerDown)
-    this.canvas.addEventListener('pointerleave', this.onPointerLeave)
-    window.addEventListener('keydown', this.onKeyDown)
-    window.addEventListener('keyup', this.onKeyUp)
-    window.addEventListener('blur', this.onBlur)
+    this.disposer.listen(this.canvas, 'pointermove', this.onPointerMove)
+    this.disposer.listen(this.canvas, 'pointerdown', this.onPointerDown)
+    this.disposer.listen(this.canvas, 'pointerleave', this.onPointerLeave)
+    this.disposer.listen(window, 'keydown', this.onKeyDown)
+    this.disposer.listen(window, 'keyup', this.onKeyUp)
+    this.disposer.listen(window, 'blur', this.onBlur)
   }
 
   /** Resolve the frontmost glTF mesh under a viewport point, if any. */
@@ -146,12 +148,7 @@ class PickSystem implements System {
 
   dispose() {
     this.clearHover()
-    this.canvas.removeEventListener('pointermove', this.onPointerMove)
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown)
-    this.canvas.removeEventListener('pointerleave', this.onPointerLeave)
-    window.removeEventListener('keydown', this.onKeyDown)
-    window.removeEventListener('keyup', this.onKeyUp)
-    window.removeEventListener('blur', this.onBlur)
+    this.disposer.dispose()
   }
 }
 

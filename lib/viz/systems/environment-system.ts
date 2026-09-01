@@ -11,6 +11,7 @@ import {
 import { uniform } from 'three/tsl'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 
+import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
@@ -42,12 +43,9 @@ function cssColorToThree(css: string): Color | null {
  * melts into the page instead of hitting a visible color seam.
  */
 class EnvironmentSystem implements System {
-  private pmrem: PMREMGenerator | null = null
   private fog = new Fog('#ffffff', FOG_NEAR, FOG_FAR)
   private background = uniform(new Color('#ffffff'))
-  private themeObserver: MutationObserver | null = null
-  private disposed = false
-  private disposables: { dispose(): void }[] = []
+  private disposer = new Disposer()
 
   init(viewer: Viewer) {
     // Background dome — with NoToneMapping its color (and the fog color)
@@ -64,22 +62,44 @@ class EnvironmentSystem implements System {
     dome.renderOrder = -1
     dome.frustumCulled = false
     viewer.scene.add(dome)
-    this.disposables.push(dome.geometry, material)
+    this.disposer.add(dome.geometry)
+    this.disposer.add(material)
+    this.disposer.add(() => dome.removeFromParent())
     // PMREM needs an initialized backend — defer until the renderer is up
     void viewer.render.whenReady.then(() => {
-      if (this.disposed) return
-      this.pmrem = new PMREMGenerator(viewer.render.renderer)
-      const environment = this.pmrem.fromScene(new RoomEnvironment(), 0.04)
+      if (this.disposer.disposed) return
+
+      const pmrem = this.disposer.add(
+        new PMREMGenerator(viewer.render.renderer)
+      )
+      const room = new RoomEnvironment()
+      let environment
+      try {
+        environment = pmrem.fromScene(room, 0.04)
+      } finally {
+        room.dispose()
+      }
+
+      this.disposer.add(environment)
       viewer.scene.environment = environment.texture
+      this.disposer.add(() => {
+        if (viewer.scene.environment === environment.texture) {
+          viewer.scene.environment = null
+        }
+      })
     })
 
     viewer.scene.fog = this.fog
+    this.disposer.add(() => {
+      if (viewer.scene.fog === this.fog) viewer.scene.fog = null
+    })
     this.syncFogToTheme()
-    this.themeObserver = new MutationObserver(() => this.syncFogToTheme())
-    this.themeObserver.observe(document.documentElement, {
+    const themeObserver = new MutationObserver(() => this.syncFogToTheme())
+    themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class'],
     })
+    this.disposer.add(() => themeObserver.disconnect())
   }
 
   /**
@@ -101,10 +121,7 @@ class EnvironmentSystem implements System {
   }
 
   dispose() {
-    this.disposed = true
-    this.themeObserver?.disconnect()
-    this.pmrem?.dispose()
-    for (const disposable of this.disposables) disposable.dispose()
+    this.disposer.dispose()
   }
 }
 

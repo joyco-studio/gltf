@@ -18,6 +18,7 @@ import {
 } from 'three/tsl'
 
 import type { InspectTarget } from '../controls/control-system'
+import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 import type { LoadedModel } from './model-system'
@@ -74,6 +75,8 @@ interface MaterialSwap {
  */
 class HighlightSystem implements System {
   private viewer!: Viewer
+  private disposer = new Disposer()
+  private modelDisposer = new Disposer()
   private highlightNode = createHighlightNode()
   private ghost!: MeshBasicNodeMaterial
   private swaps: MaterialSwap[] = []
@@ -103,12 +106,15 @@ class HighlightSystem implements System {
     })
     this.ghost.colorNode = color(GHOST_COLOR)
     this.ghost.opacityNode = float(GHOST_OPACITY)
+    this.disposer.add(this.ghost)
 
     // stay in sync with the inspect state — fully event-driven
-    viewer.controls.on('change', ({ inspecting }) => {
-      this.inspecting = inspecting
-      this.refresh()
-    })
+    this.disposer.add(
+      viewer.controls.on('change', ({ inspecting }) => {
+        this.inspecting = inspecting
+        this.refresh()
+      })
+    )
   }
 
   /**
@@ -155,6 +161,7 @@ class HighlightSystem implements System {
       nodeMaterial as NodeMaterial & { emissiveNode: Node | null }
     ).emissiveNode = this.highlightNode
     this.converted.set(material, nodeMaterial)
+    this.modelDisposer.add(nodeMaterial)
     return nodeMaterial
   }
 
@@ -232,14 +239,23 @@ class HighlightSystem implements System {
   }
 
   private disposeConverted() {
-    for (const material of this.converted.values()) material.dispose()
+    this.modelDisposer.dispose()
+    this.modelDisposer = new Disposer()
     this.converted.clear()
   }
 
-  dispose() {
+  /** Return borrowed material slots before the model owner disposes its graph. */
+  releaseModel() {
     this.restore()
     this.disposeConverted()
-    this.ghost.dispose()
+    this.cachedModel = null
+    this.hovered = null
+    this.appliedKey = null
+  }
+
+  dispose() {
+    this.releaseModel()
+    this.disposer.dispose()
   }
 }
 

@@ -1,6 +1,7 @@
 import { Camera, CameraHelper } from 'three/webgpu'
 
 import type { InspectTarget } from '../controls/control-system'
+import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
@@ -11,7 +12,8 @@ const RENDER_ORDER = 999
 class CameraHelperSystem implements System {
   private viewer!: Viewer
   private camera: Camera | null = null
-  private helper = new CameraHelper(new Camera())
+  private disposer = new Disposer()
+  private helper = this.disposer.add(new CameraHelper(new Camera()))
 
   init(viewer: Viewer) {
     this.viewer = viewer
@@ -26,7 +28,10 @@ class CameraHelperSystem implements System {
       material.depthWrite = false
     }
     viewer.scene.add(this.helper)
-    viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+    this.disposer.add(() => this.helper.removeFromParent())
+    this.disposer.add(
+      viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+    )
   }
 
   private sync(inspecting: InspectTarget | null) {
@@ -46,8 +51,7 @@ class CameraHelperSystem implements System {
   }
 
   dispose() {
-    this.helper.removeFromParent()
-    this.helper.dispose()
+    this.disposer.dispose()
     this.camera = null
   }
 }
