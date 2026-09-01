@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { BoxGeometry, Group, Mesh } from 'three/webgpu'
+import { BoxGeometry, Group, Mesh, PerspectiveCamera } from 'three/webgpu'
 
 import { ModelSystem } from './model-system'
 
@@ -123,5 +123,34 @@ describe('ModelSystem.getElementTransformInfo', () => {
     assert.deepEqual(info.bounds?.size, [6, 2, 2])
     assert.deepEqual(info.userData, { source: 'first-runtime-mesh' })
     assert.equal(info.renderables, 2)
+  })
+})
+
+describe('ModelSystem.getCameraForNode', () => {
+  it('finds a camera attached beneath a grouped glTF node', () => {
+    const root = new Group()
+    const node = new Group()
+    const camera = new PerspectiveCamera()
+    node.add(camera)
+    root.add(node)
+
+    const model = new ModelSystem()
+    model.current = {
+      root,
+      fileName: 'camera.gltf',
+      gltf: {
+        parser: {
+          associations: new Map([[node, { nodes: 7 }]]),
+          json: {
+            nodes: Array.from({ length: 8 }, (_, id) =>
+              id === 7 ? { camera: 0 } : {}
+            ),
+          },
+        },
+      },
+    } as unknown as NonNullable<ModelSystem['current']>
+
+    assert.equal(model.getCameraForNode(7), camera)
+    assert.equal(model.getCameraForNode(8), null)
   })
 })

@@ -9,6 +9,7 @@ import type { System } from './system'
 import { validateGltf } from './validate'
 import type { GltfValidationSchema } from './validation-schema'
 import { BoundsSystem } from './systems/bounds-system'
+import { CameraHelperSystem } from './systems/camera-helper-system'
 import { CameraSystem } from './systems/camera-system'
 import { EnvironmentSystem } from './systems/environment-system'
 import { GridSystem } from './systems/grid-system'
@@ -54,6 +55,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly environment: EnvironmentSystem
   readonly grid: GridSystem
   readonly bounds: BoundsSystem
+  readonly cameraHelper: CameraHelperSystem
   readonly model: ModelSystem
   readonly highlight: HighlightSystem
   readonly pick: PickSystem
@@ -77,6 +79,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.environment = new EnvironmentSystem()
     this.grid = new GridSystem()
     this.bounds = new BoundsSystem()
+    this.cameraHelper = new CameraHelperSystem()
     this.model = new ModelSystem()
     this.highlight = new HighlightSystem()
     this.pick = new PickSystem(canvas)
@@ -91,6 +94,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.grid,
       this.bounds,
       this.model,
+      this.cameraHelper,
       this.highlight,
       this.pick,
       this.axes,

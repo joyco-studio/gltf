@@ -1,5 +1,6 @@
 import {
   Box3,
+  Camera,
   Euler,
   Group,
   Material,
@@ -305,6 +306,24 @@ class ModelSystem implements System {
       }
     })
     return match
+  }
+
+  /** Runtime camera attached to an exact glTF node, if it defines one. */
+  getCameraForNode(nodeId: number): Camera | null {
+    const json = this.current?.gltf.parser.json as
+      | { nodes?: { camera?: number }[] }
+      | undefined
+    if (json?.nodes?.[nodeId]?.camera === undefined) return null
+
+    const node = this.getNodeObject(nodeId)
+    if (!node) return null
+    if (node instanceof Camera) return node
+
+    let camera: Camera | null = null
+    node.traverse((object) => {
+      if (!camera && object instanceof Camera) camera = object
+    })
+    return camera
   }
 
   /** Runtime object whose origin and orientation represent this element. */
