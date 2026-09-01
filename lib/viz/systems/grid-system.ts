@@ -9,6 +9,7 @@ import {
 } from 'three/webgpu'
 import { color, float } from 'three/tsl'
 
+import { Disposer } from '../disposer'
 import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -46,12 +47,13 @@ function flatQuaternion(roll: number) {
  */
 class GridSystem extends EventEmitter<{ change: boolean }> implements System {
   private group = new Group()
-  private disposables: { dispose(): void }[] = []
+  private disposer = new Disposer()
 
   init(viewer: Viewer) {
     this.group.name = 'floor-grid'
     this.group.add(this.buildLines(), this.buildCrosses())
     viewer.scene.add(this.group)
+    this.disposer.add(() => this.group.removeFromParent())
   }
 
   get isVisible() {
@@ -82,8 +84,7 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
     })
     material.colorNode = color(GRID_COLOR)
     material.opacityNode = float(GRID_OPACITY)
-    this.disposables.push(material)
-    return material
+    return this.disposer.add(material)
   }
 
   private buildLines() {
@@ -111,7 +112,8 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
 
     mesh.instanceMatrix.needsUpdate = true
     mesh.renderOrder = 0
-    this.disposables.push(geometry, mesh)
+    this.disposer.add(geometry)
+    this.disposer.add(mesh)
     return mesh
   }
 
@@ -142,14 +144,17 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
 
     mesh.instanceMatrix.needsUpdate = true
     mesh.renderOrder = 1
-    this.disposables.push(geometry, mesh)
+    this.disposer.add(geometry)
+    this.disposer.add(mesh)
     return mesh
   }
 
   dispose() {
-    for (const disposable of this.disposables) disposable.dispose()
-    this.disposables = []
-    this.clear()
+    try {
+      this.disposer.dispose()
+    } finally {
+      this.clear()
+    }
   }
 }
 

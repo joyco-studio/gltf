@@ -110,6 +110,10 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       instance
     return () => {
       instance.dispose()
+      const debugWindow = window as unknown as { __GLTF_VIEWER__?: Viewer }
+      if (debugWindow.__GLTF_VIEWER__ === instance) {
+        delete debugWindow.__GLTF_VIEWER__
+      }
       setViewer((current) => (current === instance ? null : current))
     }
   }, [])

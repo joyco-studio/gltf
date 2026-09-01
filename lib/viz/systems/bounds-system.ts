@@ -26,6 +26,7 @@ import {
   smoothstep,
 } from 'three/tsl'
 
+import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 import { GRID_COLOR } from './grid-system'
@@ -125,7 +126,7 @@ class BoundsSystem implements System {
 
   private mesh!: Mesh
   private material!: MeshBasicNodeMaterial
-  private unsubscribe: (() => void) | null = null
+  private disposer = new Disposer()
 
   init(viewer: Viewer) {
     this.material = createWallMaterial()
@@ -141,6 +142,9 @@ class BoundsSystem implements System {
     this.mesh.renderOrder = 2
     this.mesh.frustumCulled = false
     viewer.scene.add(this.mesh)
+    this.disposer.add(this.material)
+    this.disposer.add(this.mesh.geometry)
+    this.disposer.add(() => this.mesh.removeFromParent())
 
     // The walls only constrain (and so only matter visually in) fly mode —
     // orbit never reaches them. Track the active mode and show them to match.
@@ -148,13 +152,11 @@ class BoundsSystem implements System {
       this.mesh.visible = mode === 'fly'
     }
     sync(viewer.controls.getSnapshot().mode)
-    this.unsubscribe = viewer.controls.on('change', ({ mode }) => sync(mode))
+    this.disposer.add(viewer.controls.on('change', ({ mode }) => sync(mode)))
   }
 
   dispose() {
-    this.unsubscribe?.()
-    this.mesh.geometry.dispose()
-    this.material.dispose()
+    this.disposer.dispose()
   }
 }
 

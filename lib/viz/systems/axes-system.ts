@@ -10,6 +10,7 @@ import {
 import { color } from 'three/tsl'
 
 import type { InspectTarget } from '../controls/control-system'
+import { Disposer } from '../disposer'
 import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -47,7 +48,7 @@ const UP = new Vector3(0, 1, 0)
 class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   private viewer!: Viewer
   private group = new Group()
-  private disposables: { dispose(): void }[] = []
+  private disposer = new Disposer()
   /** Toolbar intent. */
   private enabled = false
   /** Whether an inspected element is currently positioned. */
@@ -60,9 +61,12 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     for (const axis of ['x', 'y', 'z'] as const)
       this.group.add(this.buildArrow(AXIS_DIRECTIONS[axis], AXIS_COLORS[axis]))
     viewer.scene.add(this.group)
+    this.disposer.add(() => this.group.removeFromParent())
 
     // stay in sync with the inspect state — fully event-driven
-    viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+    this.disposer.add(
+      viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
+    )
   }
 
   /** Reflects the toolbar toggle, not the live render state. */
@@ -127,7 +131,7 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
       toneMapped: false,
     })
     material.colorNode = color(hex)
-    this.disposables.push(material)
+    this.disposer.add(material)
 
     const shaftLength = 1 - HEAD_LENGTH
     const shaftGeometry = new CylinderGeometry(
@@ -149,14 +153,17 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     arrow.add(shaft, head)
     arrow.quaternion.setFromUnitVectors(UP, dir)
 
-    this.disposables.push(shaftGeometry, headGeometry)
+    this.disposer.add(shaftGeometry)
+    this.disposer.add(headGeometry)
     return arrow
   }
 
   dispose() {
-    for (const disposable of this.disposables) disposable.dispose()
-    this.disposables = []
-    this.clear()
+    try {
+      this.disposer.dispose()
+    } finally {
+      this.clear()
+    }
   }
 }
 

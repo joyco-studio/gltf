@@ -18,6 +18,7 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 
 import type { InspectTarget } from '../controls/control-system'
+import { Disposer, disposeObject3D } from '../disposer'
 import { createGltfFileSet } from '../file-set'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -91,24 +92,6 @@ function transformFromObject(object: Object3D, world: boolean): ElementTransform
   }
 }
 
-function disposeMaterial(material: Material) {
-  for (const value of Object.values(material)) {
-    if (value instanceof Texture) value.dispose()
-  }
-  material.dispose()
-}
-
-function disposeObject(root: Object3D) {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return
-    object.geometry.dispose()
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material]
-    materials.forEach(disposeMaterial)
-  })
-}
-
 /**
  * Owns the currently loaded glTF: loading (with draco/ktx2/meshopt support),
  * swapping into the scene, and disposing GPU resources of the previous model.
@@ -120,25 +103,31 @@ class ModelSystem implements System {
   private container = new Group()
   private dracoLoader: DRACOLoader | null = null
   private ktx2Loader: KTX2Loader | null = null
+  private disposer = new Disposer()
+  private modelDisposer = new Disposer()
   private loadId = 0
 
   init(viewer: Viewer) {
     this.viewer = viewer
     this.container.name = 'model-container'
     viewer.scene.add(this.container)
+    this.disposer.add(() => this.container.removeFromParent())
   }
 
   private async createLoader(manager?: LoadingManager) {
     // KTX2 support detection inspects the backend — renderer must be ready
     await this.viewer.render.whenReady
+    if (this.disposer.disposed) return null
 
     if (!this.dracoLoader) {
       this.dracoLoader = new DRACOLoader().setDecoderPath(DRACO_DECODER_PATH)
+      this.disposer.add(this.dracoLoader)
     }
     if (!this.ktx2Loader) {
       this.ktx2Loader = new KTX2Loader()
         .setTranscoderPath(KTX2_TRANSCODER_PATH)
         .detectSupport(this.viewer.render.renderer)
+      this.disposer.add(this.ktx2Loader)
     }
 
     const loader = new GLTFLoader(manager)
@@ -157,12 +146,16 @@ class ModelSystem implements System {
 
     const loadId = ++this.loadId
     const loader = await this.createLoader(fileSet.manager)
+    if (!loader) {
+      fileSet.revoke()
+      return null
+    }
 
     try {
       const gltf = await loader.loadAsync(fileSet.rootUrl)
       // A newer load won the race — discard this one.
       if (loadId !== this.loadId) {
-        disposeObject(gltf.scene)
+        disposeObject3D(gltf.scene)
         return null
       }
       return this.swap(gltf, fileSet.rootFile.name)
@@ -174,9 +167,10 @@ class ModelSystem implements System {
   async loadUrl(url: string, transform?: ModelTransform) {
     const loadId = ++this.loadId
     const loader = await this.createLoader()
+    if (!loader) return null
     const gltf = await loader.loadAsync(url)
     if (loadId !== this.loadId) {
-      disposeObject(gltf.scene)
+      disposeObject3D(gltf.scene)
       return null
     }
     return this.swap(gltf, url.split('/').pop() ?? url, transform)
@@ -424,10 +418,11 @@ class ModelSystem implements System {
   }
 
   private swap(gltf: GLTF, fileName: string, transform?: ModelTransform) {
-    if (this.current) {
-      this.container.remove(this.current.root)
-      disposeObject(this.current.root)
-    }
+    // Highlight borrows mesh material slots; hand them back before disposing
+    // the old graph so its original materials and textures remain enumerable.
+    this.viewer.highlight.releaseModel()
+    this.modelDisposer.dispose()
+    this.modelDisposer = new Disposer()
 
     // Resize then offset, applied before framing so the camera fits the model
     // where it ends up. position is parent-space, so it stays in world units
@@ -435,6 +430,7 @@ class ModelSystem implements System {
     if (transform?.scale !== undefined) gltf.scene.scale.setScalar(transform.scale)
     if (transform?.position) gltf.scene.position.fromArray(transform.position)
     this.container.add(gltf.scene)
+    this.modelDisposer.add(() => disposeObject3D(gltf.scene))
     this.current = { gltf, root: gltf.scene, fileName }
     this.viewer.controls.frame(gltf.scene)
     this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
@@ -442,12 +438,10 @@ class ModelSystem implements System {
   }
 
   dispose() {
-    if (this.current) {
-      disposeObject(this.current.root)
-      this.current = null
-    }
-    this.dracoLoader?.dispose()
-    this.ktx2Loader?.dispose()
+    this.loadId += 1
+    this.modelDisposer.dispose()
+    this.current = null
+    this.disposer.dispose()
   }
 }
 

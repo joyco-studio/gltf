@@ -14,6 +14,7 @@ class RenderSystem implements System {
   readonly whenReady: Promise<void>
 
   private ready = false
+  private disposed = false
   private viewer!: Viewer
 
   constructor(canvas: HTMLCanvasElement) {
@@ -33,10 +34,16 @@ class RenderSystem implements System {
     this.whenReady = this.renderer
       .init()
       .then(() => {
+        if (this.disposed) {
+          this.renderer.dispose()
+          return
+        }
         this.ready = true
       })
       .catch((error: unknown) => {
-        console.error('viz: renderer failed to initialize', error)
+        if (!this.disposed) {
+          console.error('viz: renderer failed to initialize', error)
+        }
       })
   }
 
@@ -55,6 +62,8 @@ class RenderSystem implements System {
   }
 
   dispose() {
+    this.disposed = true
+    this.ready = false
     this.renderer.dispose()
   }
 }
