@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, Upload } from "lucide-react";
+import { Scissors, Search, Upload } from "lucide-react";
 
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -20,6 +20,9 @@ function ViewerHeader() {
   const { snapshot, setSearchOpen } = useViewer();
   const { input, openPicker } = useFilePicker();
   const { document } = snapshot;
+  const chopperUrl = snapshot.sourceUrl
+    ? `https://chopper.joyco.studio/?${new URLSearchParams({ url: snapshot.sourceUrl })}`
+    : null;
 
   return (
     <header className="absolute inset-x-4 top-4 z-30">
@@ -72,6 +75,18 @@ function ViewerHeader() {
           <Upload />
           Open
         </Button>
+        {document && chopperUrl ? (
+          <Button variant="accent" size="sm" asChild>
+            <a
+              href={chopperUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <Scissors />
+              Compress
+            </a>
+          </Button>
+        ) : null}
         <Separator
           orientation="vertical"
           className="h-auto self-stretch [--thickness:0.5px]"
