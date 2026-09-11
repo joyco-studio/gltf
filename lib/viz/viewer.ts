@@ -28,6 +28,7 @@ type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
 interface ViewerSnapshot {
   status: ViewerStatus
   document: GltfDocumentInfo | null
+  sourceUrl: string | null
   error: string | null
 }
 
@@ -40,6 +41,7 @@ interface ViewerEvents extends Record<string, unknown> {
 const EMPTY_SNAPSHOT: ViewerSnapshot = {
   status: 'empty',
   document: null,
+  sourceUrl: null,
   error: null,
 }
 
@@ -181,11 +183,11 @@ class Viewer extends EventEmitter<ViewerEvents> {
   }
 
   async loadFiles(files: File[]) {
-    await this.load(() => this.model.loadFiles(files))
+    await this.load(() => this.model.loadFiles(files), null)
   }
 
   async loadUrl(url: string, transform?: ModelTransform) {
-    await this.load(() => this.model.loadUrl(url, transform))
+    await this.load(() => this.model.loadUrl(url, transform), url)
   }
 
   /** Applies one portable rule schema to the current and all future models. */
@@ -200,7 +202,10 @@ class Viewer extends EventEmitter<ViewerEvents> {
     })
   }
 
-  private async load(loadModel: () => Promise<LoadedModel | null>) {
+  private async load(
+    loadModel: () => Promise<LoadedModel | null>,
+    sourceUrl: string | null
+  ) {
     this.setSnapshot({ status: 'loading', error: null })
     try {
       const loaded = await loadModel()
@@ -213,7 +218,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       // derive findings from the latest applied rules at commit time.
       document.validationIssues = validateGltf(source, this.validationSchema)
       this.validationSource = source
-      this.setSnapshot({ status: 'ready', document })
+      this.setSnapshot({ status: 'ready', document, sourceUrl })
     } catch (error) {
       if (this.disposer.disposed) return
       this.setSnapshot({

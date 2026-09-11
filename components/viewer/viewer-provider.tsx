@@ -97,10 +97,6 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const validationSchemaRevisionRef = React.useRef(0)
   const [validationSchemaError, setValidationSchemaError] =
     React.useState<string | null>(null)
-  // source URL of the active model, or null when loaded from local files —
-  // lets the UI credit the bundled example while it's on screen
-  const [source, setSource] = React.useState<string | null>(null)
-
   const attach = React.useCallback((canvas: HTMLCanvasElement) => {
     const instance = new Viewer(canvas)
     instance.start()
@@ -183,7 +179,6 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const openFiles = React.useCallback(
     (files: File[]) => {
       select(null)
-      setSource(null)
       // local files can't be shared — drop any stale ?url / ?path
       const params = new URLSearchParams(window.location.search)
       params.delete('url')
@@ -202,7 +197,6 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
   const openUrl = React.useCallback(
     (url: string, transform?: ModelTransform) => {
       select(null)
-      setSource(url)
       // reflect the source in the URL (?url=…) so the model is shareable, and
       // drop any ?path — a fresh model invalidates the previous selection. The
       // initial deep-link path is captured by UrlParamLoader *before* this runs,
@@ -262,7 +256,7 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       openFiles,
       openUrl,
       openExample,
-      isExample: source === EXAMPLE_MODEL.url,
+      isExample: snapshot.sourceUrl === EXAMPLE_MODEL.url,
       jumpTo,
       tab,
       setTab,
@@ -287,7 +281,6 @@ function ViewerProvider({ children }: { children: React.ReactNode }) {
       openFiles,
       openUrl,
       openExample,
-      source,
       jumpTo,
       tab,
       setTab,
