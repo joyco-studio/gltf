@@ -1,5 +1,11 @@
 # gltf
 
+## 0.2.1
+
+### Patch Changes
+
+- 69681fd: Update three.js from 0.185.1 to 0.186.0.
+
 ## 0.2.0
 
 ### Minor Changes
