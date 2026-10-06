@@ -29,6 +29,7 @@ const KTX2_TRANSCODER_PATH = `https://cdn.jsdelivr.net/npm/three@0.${REVISION}.0
 
 interface LoadedModel {
   gltf: GLTF
+  files: File[]
   root: Object3D
   fileName: string
 }
@@ -158,7 +159,7 @@ class ModelSystem implements System {
         disposeObject3D(gltf.scene)
         return null
       }
-      return this.swap(gltf, fileSet.rootFile.name)
+      return this.swap(gltf, fileSet.rootFile.name, undefined, files)
     } finally {
       fileSet.revoke()
     }
@@ -417,7 +418,12 @@ class ModelSystem implements System {
     return mesh.getWorldQuaternion(new Quaternion())
   }
 
-  private swap(gltf: GLTF, fileName: string, transform?: ModelTransform) {
+  private swap(
+    gltf: GLTF,
+    fileName: string,
+    transform?: ModelTransform,
+    files: File[] = []
+  ) {
     // Highlight borrows mesh material slots; hand them back before disposing
     // the old graph so its original materials and textures remain enumerable.
     this.viewer.highlight.releaseModel()
@@ -431,7 +437,7 @@ class ModelSystem implements System {
     if (transform?.position) gltf.scene.position.fromArray(transform.position)
     this.container.add(gltf.scene)
     this.modelDisposer.add(() => disposeObject3D(gltf.scene))
-    this.current = { gltf, root: gltf.scene, fileName }
+    this.current = { gltf, root: gltf.scene, fileName, files }
     this.viewer.controls.frame(gltf.scene)
     this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
     return this.current
