@@ -21,10 +21,12 @@ function InspectContextMenu({
   selection,
   name,
   children,
+  actions,
 }: {
   selection: Selection
   name: string
   children: React.ReactNode
+  actions?: React.ReactNode
 }) {
   const { jumpTo } = useViewer()
 
@@ -36,6 +38,7 @@ function InspectContextMenu({
           <ScanSearch />
           Inspect
         </ContextMenuItem>
+        {actions}
       </ContextMenuContent>
     </ContextMenu>
   )

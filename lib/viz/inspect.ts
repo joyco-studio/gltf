@@ -66,6 +66,7 @@ interface GltfTextureInfo {
   id: number
   name: string
   uri: string | null
+  bufferView: number | null
   slots: string[]
   instances: number
   mimeType: string | null
@@ -523,6 +524,7 @@ async function buildTextureInfos(
           image?.name ??
           (image?.uri ? fileNameFromUri(image.uri) : `texture_${id}`),
         uri: image?.uri ?? null,
+        bufferView: image?.bufferView ?? null,
         slots: [...(slotsByTexture.get(id) ?? [])],
         instances: instancesByTexture.get(id) ?? 0,
         mimeType:
