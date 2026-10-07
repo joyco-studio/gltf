@@ -396,6 +396,30 @@ class ModelSystem implements System {
     }
   }
 
+  /** Framing bounds; transform-only nodes use a small region at their origin. */
+  getInspectBox(target: InspectTarget): Box3 | null {
+    const box = this.getWorldBoxOfMeshes(this.getMeshesForTarget(target))
+    if (box || target.kind !== 'node') return box
+
+    const transform = this.getElementWorldTransform({
+      kind: target.kind,
+      id: target.id,
+    })
+    if (!transform) return null
+
+    // Empties have no geometric extent. Use 10% of the model's extent, or
+    // one world unit for geometry-free scenes, to keep framing and axes usable.
+    const size = this.getWorldBoxOfMeshes(this.getAllMeshes())?.getSize(
+      new Vector3()
+    )
+    const extent = size ? Math.max(size.x, size.y, size.z) : 0
+    const side = extent > 0 ? Math.max(extent * 0.1, 0.01) : 1
+    return new Box3().setFromCenterAndSize(
+      transform.position,
+      new Vector3(side, side, side)
+    )
+  }
+
   /** Combined world-space bounding box of a set of renderables. */
   getWorldBoxOfMeshes(meshes: Mesh[]): Box3 | null {
     if (meshes.length === 0) return null

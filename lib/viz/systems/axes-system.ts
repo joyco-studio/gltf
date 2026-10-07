@@ -89,7 +89,7 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   private sync(inspecting: InspectTarget | null) {
     const model = this.viewer.model
     const meshes = inspecting ? model.getMeshesForTarget(inspecting) : []
-    const box = meshes.length ? model.getWorldBoxOfMeshes(meshes) : null
+    const box = inspecting ? model.getInspectBox(inspecting) : null
 
     if (!box) {
       this.hasTarget = false

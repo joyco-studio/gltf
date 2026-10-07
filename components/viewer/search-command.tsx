@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Image as ImageIcon, Palette, Play } from "lucide-react";
+import { Box, GitBranch, Image as ImageIcon, Palette, Play } from "lucide-react";
 
 import {
   Command,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/command";
 
 import { useViewer, type Selection } from "./viewer-provider";
+import { NODE_TYPE_LABELS } from "./node-type";
 
 /**
  * ⌘K fuzzy search across every named entity in the glTF document. Selecting
@@ -44,15 +45,34 @@ function SearchCommand() {
       open={searchOpen}
       onOpenChange={setSearchOpen}
       title="Search glTF contents"
-      description="Fuzzy search meshes, materials and textures by name"
+      description="Fuzzy search nodes, meshes, materials, textures and animations by name"
       className="sm:min-w-sm sm:max-w-sm"
     >
       <Command>
-        <CommandInput placeholder="Search meshes, materials, textures..." />
+        <CommandInput placeholder="Search nodes, meshes, materials..." />
         <CommandList>
           <CommandEmpty>
             {document ? "No results found." : "Load a glTF file first."}
           </CommandEmpty>
+
+          {document && document.nodes.length > 0 ? (
+            <CommandGroup heading="Nodes">
+              {document.nodes.map((node) => (
+                <CommandItem
+                  key={`node-${node.id}`}
+                  value={`node ${node.name} ${node.id}`}
+                  keywords={[NODE_TYPE_LABELS[node.objectType]]}
+                  onSelect={() => handleSelect({ kind: "node", id: node.id }, node.name)}
+                >
+                  <GitBranch />
+                  {node.name}
+                  <span className="ml-auto font-mono text-xs text-muted-foreground">
+                    #{node.id}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
 
           {document && document.meshes.length > 0 ? (
             <CommandGroup heading="Meshes">
