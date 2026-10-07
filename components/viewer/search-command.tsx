@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, GitBranch, Image as ImageIcon, Palette, Play } from "lucide-react";
+import { Box, Image as ImageIcon, Palette, Play } from "lucide-react";
 
 import {
   Command,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command";
 
 import { useViewer, type Selection } from "./viewer-provider";
-import { NODE_TYPE_LABELS } from "./node-type";
+import { NODE_TYPE_ICONS, NODE_TYPE_LABELS } from "./node-type";
 
 /**
  * ⌘K fuzzy search across every named entity in the glTF document. Selecting
@@ -57,20 +57,23 @@ function SearchCommand() {
 
           {document && document.nodes.length > 0 ? (
             <CommandGroup heading="Nodes">
-              {document.nodes.map((node) => (
-                <CommandItem
-                  key={`node-${node.id}`}
-                  value={`node ${node.name} ${node.id}`}
-                  keywords={[NODE_TYPE_LABELS[node.objectType]]}
-                  onSelect={() => handleSelect({ kind: "node", id: node.id }, node.name)}
-                >
-                  <GitBranch />
-                  {node.name}
-                  <span className="ml-auto font-mono text-xs text-muted-foreground">
-                    #{node.id}
-                  </span>
-                </CommandItem>
-              ))}
+              {document.nodes.map((node) => {
+                const Icon = NODE_TYPE_ICONS[node.objectType];
+                return (
+                  <CommandItem
+                    key={`node-${node.id}`}
+                    value={`node ${node.name} ${node.id}`}
+                    keywords={[NODE_TYPE_LABELS[node.objectType]]}
+                    onSelect={() => handleSelect({ kind: "node", id: node.id }, node.name)}
+                  >
+                    <Icon />
+                    {node.name}
+                    <span className="ml-auto font-mono text-xs text-muted-foreground">
+                      #{node.id}
+                    </span>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           ) : null}
 
