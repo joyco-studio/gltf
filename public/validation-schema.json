@@ -34,6 +34,92 @@
               },
               "operator": {
                 "type": "string",
+                "enum": [
+                  "hasChildren",
+                  "hasDescendants",
+                  "hasPath"
+                ]
+              },
+              "value": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/__schema5"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
+                "const": "matchesTree"
+              },
+              "value": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/__schema6"
+                  },
+                  "children": {
+                    "$ref": "#/$defs/__schema7"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf."
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "operator",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "path": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "level": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "title": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "message": {
+                "$ref": "#/$defs/__schema4"
+              },
+              "operator": {
+                "type": "string",
                 "const": "exists"
               },
               "value": {
@@ -113,7 +199,7 @@
                 "minItems": 1,
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/__schema5"
+                  "$ref": "#/$defs/__schema9"
                 }
               }
             },
@@ -219,7 +305,7 @@
               },
               "flags": {
                 "description": "Linear-time regular expression flags: case-insensitive (i), multiline (m), dot-all (s), and Unicode (u).",
-                "$ref": "#/$defs/__schema6"
+                "$ref": "#/$defs/__schema10"
               }
             },
             "required": [
@@ -304,8 +390,39 @@
     "__schema4": {
       "type": "string"
     },
-    "__schema5": {},
+    "__schema5": {
+      "type": "string",
+      "minLength": 1
+    },
     "__schema6": {
+      "$ref": "#/$defs/__schema5"
+    },
+    "__schema7": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema8"
+      }
+    },
+    "__schema8": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema8"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "__schema9": {},
+    "__schema10": {
       "type": "string",
       "maxLength": 4,
       "pattern": "^[imsu]*$"

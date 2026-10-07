@@ -3,6 +3,20 @@ import * as z from 'zod'
 const VALIDATION_SCHEMA_VERSION = 1 as const
 const MAX_REGEX_LENGTH = 256
 
+const hierarchyName = z.string().min(1)
+const HierarchyChildSchema = z.strictObject({
+  name: hierarchyName,
+  get children() {
+    return z.array(HierarchyChildSchema).optional()
+  },
+})
+const HierarchyTreeSchema = z.strictObject({
+  name: hierarchyName.optional(),
+  children: z.array(HierarchyChildSchema).optional(),
+}).meta({
+  description: 'Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf.',
+})
+
 const level = z.enum(['error', 'warning']).default('error')
 const ruleBase = {
   id: z.string().trim().min(1).regex(/\S/),
@@ -17,6 +31,16 @@ const ruleBase = {
 }
 
 const GltfValidationRuleSchema = z.discriminatedUnion('operator', [
+  z.strictObject({
+    ...ruleBase,
+    operator: z.enum(['hasChildren', 'hasDescendants', 'hasPath']),
+    value: z.array(hierarchyName).min(1),
+  }),
+  z.strictObject({
+    ...ruleBase,
+    operator: z.literal('matchesTree'),
+    value: HierarchyTreeSchema,
+  }),
   z.strictObject({
     ...ruleBase,
     operator: z.literal('exists'),
@@ -94,6 +118,7 @@ function createGltfValidationJsonSchema() {
 
 type GltfValidationRule = z.output<typeof GltfValidationRuleSchema>
 type GltfValidationSchema = z.output<typeof GltfValidationSchemaDefinition>
+type GltfHierarchyTree = z.output<typeof HierarchyTreeSchema>
 
 export {
   createGltfValidationJsonSchema,
@@ -101,4 +126,4 @@ export {
   MAX_REGEX_LENGTH,
   VALIDATION_SCHEMA_VERSION,
 }
-export type { GltfValidationRule, GltfValidationSchema }
+export type { GltfValidationRule, GltfValidationSchema, GltfHierarchyTree }

@@ -143,6 +143,9 @@ of meshes with multiple primitives. Version 1 supports these operators:
   and lookaround assertions are not supported.
 - `lessThan`, `lessThanOrEqual`, `greaterThan`, and `greaterThanOrEqual` with a
   numeric value
+- `hasChildren` and `hasDescendants` with a non-empty array of node names
+- `hasPath` with a non-empty array of node names, starting at a selected scene's root
+- `matchesTree` with a nested tree object describing an exact, unordered subtree
 
 Rules default to `"level": "error"`; set it to `"warning"` for advisory
 checks. Optional `title` and `message` fields customize the resulting finding.
@@ -174,3 +177,76 @@ It is generated from the Zod definition that also provides runtime parsing and
 TypeScript types. After changing that definition, run
 `pnpm generate:validation-schema`; tests and `pnpm build` reject a stale public
 file.
+
+### Hierarchy validation
+
+Hierarchy rules use the same version 1 `path` / `operator` / `value` format in
+the viewer and API. JSONPath selects source glTF **node objects** for
+`hasChildren`, `hasDescendants`, and `matchesTree`, or **scene objects** for
+`hasPath`. Select the objects themselves, not their names or numeric indices.
+Every selected object must pass; an empty selection fails. Names are exact,
+case-sensitive source node names, independent of mesh names and loader renaming.
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "body-children",
+      "path": "$.nodes[?@.name == \"Body\"]",
+      "operator": "hasChildren",
+      "value": ["Frame", "DisplayGroup"]
+    },
+    {
+      "id": "screen-within-body",
+      "path": "$.nodes[?@.name == \"Body\"]",
+      "operator": "hasDescendants",
+      "value": ["Screen"]
+    },
+    {
+      "id": "screen-path",
+      "path": "$.scenes[0]",
+      "operator": "hasPath",
+      "value": ["Root", "Body", "DisplayGroup", "Screen"]
+    },
+    {
+      "id": "body-tree",
+      "path": "$.nodes[?@.name == \"Body\"]",
+      "operator": "matchesTree",
+      "value": {
+        "children": [
+          { "name": "Frame", "children": [] },
+          {
+            "name": "DisplayGroup",
+            "children": [{ "name": "Screen", "children": [] }]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- `hasChildren` requires each name among the direct children; extra children
+  are allowed. `hasDescendants` searches all levels below each selected node,
+  excluding the selected node itself. These are presence checks: repeating a
+  name in `value` does not require multiple nodes.
+- `hasPath` follows direct parent-child links from a root of each selected
+  scene. Each scene must contain at least one complete matching path. Duplicate
+  names are explored as alternative branches; unrelated branches cannot supply
+  different steps of a path. Array segments allow names containing `/`.
+- `matchesTree` compares the selected node against `value`. Its optional `name`
+  checks that node's name. Each child specification requires a `name` and may
+  itself have `children`. A specified `children` array must match exactly,
+  ignoring sibling order but preserving duplicate counts. `children: []`
+  requires a leaf; omitting `children` leaves that node's descendants unchecked.
+  Duplicate sibling names are matched by their requested subtree structure.
+
+Hierarchy rules check node references, repeated children, multiple parents,
+and cycles across the source node graph before evaluating relationships.
+Selected scenes must reference distinct, valid root nodes. Malformed graphs
+produce findings instead of partial matches. Each rule reports its first
+failure and includes inspectable node references where available. Existing
+JSONPath rules continue to evaluate the original document without these graph
+checks. The schema rejects missing or incorrectly shaped hierarchy values and
+unknown keys; no additional top-level or rule options are needed.

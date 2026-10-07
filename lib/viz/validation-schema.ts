@@ -1,6 +1,7 @@
 import { exec, type JsonValue, type Path } from 'jsonpath-rfc9535'
 import parseJsonPath from 'jsonpath-rfc9535/parser'
 import { RE2JS } from 're2js'
+import { createHierarchyValidator } from './validation-hierarchy'
 
 import {
   GltfValidationSchemaDefinition,
@@ -35,6 +36,7 @@ interface ResolvedValue {
 interface RuleFailure {
   description: string
   matches?: ResolvedValue[]
+  references?: GltfValidationReference[]
 }
 
 const REFERENCE_KINDS = {
@@ -219,11 +221,20 @@ function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult
     : { ok: false, errors }
 }
 
-function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleFailure | null {
+function evaluateRule(
+  rule: GltfValidationRule,
+  matches: ResolvedValue[],
+  validateHierarchy: ReturnType<typeof createHierarchyValidator>
+): RuleFailure | null {
   const values = matches.map(({ value }) => value)
   const expected = 'value' in rule ? rule.value : undefined
 
   switch (rule.operator) {
+    case 'hasChildren':
+    case 'hasDescendants':
+    case 'hasPath':
+    case 'matchesTree':
+      return validateHierarchy(rule, values)
     case 'exists': {
       const passed = expected ? matches.length > 0 : matches.length === 0
       return passed
@@ -348,6 +359,7 @@ function validateWithSchema(
   source: unknown,
   schema: GltfValidationSchema
 ): GltfValidationResult[] {
+  const validateHierarchy = createHierarchyValidator(source)
   return schema.rules.flatMap((rule) => {
     let matches: ResolvedValue[]
     try {
@@ -363,10 +375,10 @@ function validateWithSchema(
       ]
     }
 
-    const failure = evaluateRule(rule, matches)
+    const failure = evaluateRule(rule, matches, validateHierarchy)
     if (!failure) return []
 
-    const references = uniqueReferences(failure.matches)
+    const references = failure.references ?? uniqueReferences(failure.matches)
     const referenceText = references.length
       ? ` Affected: ${references.map(({ label }) => label).join(', ')}.`
       : ''
