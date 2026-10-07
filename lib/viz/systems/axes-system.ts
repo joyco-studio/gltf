@@ -53,6 +53,7 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   private enabled = false
   /** Whether an inspected element is currently positioned. */
   private hasTarget = false
+  private inspecting: InspectTarget | null = null
 
   init(viewer: Viewer) {
     this.viewer = viewer
@@ -87,6 +88,8 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
 
   /** Anchor the triad on the inspected element, or drop it if none. */
   private sync(inspecting: InspectTarget | null) {
+    const newInspection = inspecting !== this.inspecting
+    this.inspecting = inspecting
     const model = this.viewer.model
     const meshes = inspecting ? model.getMeshesForTarget(inspecting) : []
     const box = inspecting ? model.getInspectBox(inspecting) : null
@@ -116,6 +119,9 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     )
     this.group.scale.setScalar(maxSize * LENGTH_FACTOR)
     this.hasTarget = true
+    // Give invisible nodes a reference on entry, while allowing the user to
+    // hide it for the rest of this inspection as camera changes are published.
+    if (newInspection && meshes.length === 0) this.setVisible(true)
     this.refresh()
   }
 

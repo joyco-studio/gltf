@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { BoxGeometry, Group, Mesh, Scene } from 'three/webgpu'
+import { BoxGeometry, Group, Mesh, PerspectiveCamera, Scene } from 'three/webgpu'
 
 import type { InspectTarget } from '../controls/control-system'
 import type { Viewer } from '../viewer'
@@ -8,19 +8,27 @@ import { AxesSystem } from './axes-system'
 import { ModelSystem } from './model-system'
 
 describe('AxesSystem', () => {
-  it('shows empty-node axes at the world origin and rotation, and clears on exit', () => {
+  it('auto-enables meshless-node axes and respects manual hiding until the next inspection', () => {
     const root = new Group()
     root.position.set(10, 0, 0)
     root.rotation.set(0, Math.PI / 2, 0)
     const node = new Group()
     node.position.set(1, 2, 3)
     node.rotation.set(Math.PI / 4, 0, 0)
-    root.add(node)
+    const camera = new PerspectiveCamera()
+    root.add(node, camera)
 
     const model = new ModelSystem()
     model.current = {
       root,
-      gltf: { parser: { associations: new Map([[node, { nodes: 7 }]]) } },
+      gltf: {
+        parser: {
+          associations: new Map<object, Record<string, number>>([
+            [node, { nodes: 7 }],
+            [camera, { nodes: 8 }],
+          ]),
+        },
+      },
     } as unknown as NonNullable<ModelSystem['current']>
 
     let publishInspection: (target: InspectTarget | null) => void = () =>
@@ -40,11 +48,16 @@ describe('AxesSystem', () => {
         },
       },
     } as unknown as Viewer)
-    axes.setVisible(true)
-    publishInspection({ kind: 'node', id: 7, name: 'empty' })
+    const visibilityChanges: boolean[] = []
+    axes.on('change', (visible) => visibilityChanges.push(visible))
+    const target = { kind: 'node', id: 7, name: 'empty' } as const
+    assert.equal(axes.isVisible, false)
+    publishInspection(target)
 
     const helper = scene.getObjectByName('element-axes')!
     assert.equal(helper.visible, true)
+    assert.equal(axes.isVisible, true)
+    assert.deepEqual(visibilityChanges, [true])
     assert.ok(
       helper.position.distanceTo(node.getWorldPosition(node.position.clone())) < 1e-10
     )
@@ -54,10 +67,20 @@ describe('AxesSystem', () => {
     assert.ok(helper.scale.x > 0)
     axes.setVisible(false)
     assert.equal(helper.visible, false)
-    axes.setVisible(true)
+    // Projection and alignment changes republish the current inspection.
+    publishInspection(target)
+    assert.equal(helper.visible, false)
+    assert.equal(axes.isVisible, false)
+    assert.deepEqual(visibilityChanges, [true, false])
+    publishInspection({ kind: 'node', id: 8, name: 'camera' })
     assert.equal(helper.visible, true)
+    assert.equal(axes.isVisible, true)
+    assert.deepEqual(visibilityChanges, [true, false, true])
     publishInspection(null)
     assert.equal(helper.visible, false)
+    axes.setVisible(false)
+    publishInspection(target)
+    assert.equal(helper.visible, true)
     axes.dispose()
     assert.equal(scene.getObjectByName('element-axes'), undefined)
   })
@@ -109,6 +132,8 @@ describe('AxesSystem', () => {
 
     const helper = scene.getObjectByName('element-axes')
     assert.ok(helper)
+    assert.equal(helper.visible, false)
+    assert.equal(axes.isVisible, false)
     assert.deepEqual(helper.position.toArray(), [4, 5, 6])
     assert.ok(
       helper.quaternion.angleTo(
