@@ -7,6 +7,7 @@ import { AxesSystem } from './systems/axes-system'
 import { EventEmitter } from './event-emitter'
 import { inspectGltf, type GltfDocumentInfo } from './inspect'
 import type { System } from './system'
+import { renderGpuTexturePreview } from './texture-preview'
 import { validateGltf } from './validate'
 import type { GltfValidationSchema } from './validation-schema'
 import { BoundsSystem } from './systems/bounds-system'
@@ -206,7 +207,16 @@ class Viewer extends EventEmitter<ViewerEvents> {
       if (!loaded || this.disposer.disposed) return // superseded or unmounted
 
       const source = loaded.gltf.parser.json as unknown
-      const document = await inspectGltf(loaded.gltf, loaded.fileName)
+      const document = await inspectGltf(
+        loaded.gltf,
+        loaded.fileName,
+        (texture, maxSize) => {
+          if (this.disposer.disposed || this.model.current !== loaded) {
+            return Promise.resolve(null)
+          }
+          return renderGpuTexturePreview(texture, this.render.renderer, maxSize)
+        }
+      )
       if (this.disposer.disposed || this.model.current !== loaded) return
       // The schema may have changed while texture inspection was awaiting;
       // derive findings from the latest applied rules at commit time.

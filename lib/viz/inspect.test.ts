@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { CompressedTexture } from 'three/webgpu'
 
 import { inspectGltf } from './inspect'
 
@@ -52,5 +53,49 @@ describe('inspectGltf node types', () => {
         'empty',
       ]
     )
+  })
+})
+
+describe('texture previews', () => {
+  function compressedGltf() {
+    const texture = new CompressedTexture([], 2048, 1024)
+    const gltf = {
+      parser: {
+        json: {
+          textures: [{ extensions: { KHR_texture_basisu: { source: 0 } } }],
+          images: [{ name: 'Compressed', mimeType: 'image/ktx2', bufferView: 0 }],
+          bufferViews: [{ byteLength: 128 }],
+        },
+        getDependency: async () => texture,
+      },
+    } as unknown as GLTF
+    return { texture, gltf }
+  }
+
+  it('uses the decoded KTX2 texture for a bounded GPU thumbnail', async () => {
+    const { texture, gltf } = compressedGltf()
+    const document = await inspectGltf(gltf, 'compressed.glb', async (source, maxSize) => {
+      assert.equal(source, texture)
+      assert.equal(maxSize, 256)
+      return 'data:image/png;base64,preview'
+    })
+
+    assert.equal(document.textures[0].previewUrl, 'data:image/png;base64,preview')
+    assert.equal(document.textures[0].mimeType, 'image/ktx2')
+    assert.equal(document.textures[0].width, 2048)
+    assert.equal(document.textures[0].height, 1024)
+    assert.equal(document.textures[0].bufferView, 0)
+  })
+
+  it('keeps texture metadata when GPU preview generation fails', async () => {
+    const { gltf } = compressedGltf()
+    const document = await inspectGltf(gltf, 'compressed.glb', async () => {
+      throw new Error('Readback failed')
+    })
+
+    assert.equal(document.textures[0].previewUrl, null)
+    assert.equal(document.textures[0].width, 2048)
+    assert.equal(document.textures[0].name, 'Compressed')
+    assert.equal(document.textures[0].size, 128)
   })
 })

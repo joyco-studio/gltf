@@ -422,8 +422,7 @@ function fileNameFromUri(uri: string) {
 
 /**
  * Renders a downscaled preview of a decoded texture image. Compressed
- * textures (e.g. KTX2 transcoded to GPU formats) have no drawable image and
- * return null.
+ * textures have no drawable image and use the optional GPU preview fallback.
  */
 function renderTexturePreview(image: unknown): string | null {
   if (typeof document === 'undefined') return null
@@ -457,7 +456,8 @@ function renderTexturePreview(image: unknown): string | null {
 async function buildTextureInfos(
   gltf: GLTF,
   json: GltfJson,
-  materials: GltfMaterialInfo[]
+  materials: GltfMaterialInfo[],
+  renderGpuPreview?: (texture: Texture, maxSize: number) => Promise<string | null>
 ) {
   const images = json.images ?? []
   const bufferViews = json.bufferViews ?? []
@@ -504,8 +504,11 @@ async function buildTextureInfos(
         width = textureImage?.width ?? 0
         height = textureImage?.height ?? 0
         previewUrl = renderTexturePreview(threeTexture?.image)
+        if (!previewUrl && threeTexture && renderGpuPreview) {
+          previewUrl = await renderGpuPreview(threeTexture, PREVIEW_MAX_SIZE)
+        }
       } catch {
-        // texture failed to decode — keep the row with whatever JSON tells us
+        // Decode or preview failed — retain the row and any available metadata.
       }
 
       const size =
@@ -586,7 +589,8 @@ function buildAnimationInfos(json: GltfJson) {
 
 async function inspectGltf(
   gltf: GLTF,
-  fileName: string
+  fileName: string,
+  renderGpuPreview?: (texture: Texture, maxSize: number) => Promise<string | null>
 ): Promise<GltfDocumentInfo> {
   const json = gltf.parser.json as GltfJson
 
@@ -597,7 +601,7 @@ async function inspectGltf(
   const meshes = buildMeshInfos(json, materialNames)
   const nodes = buildNodeInfos(json, meshes)
   const materials = buildMaterialInfos(json, meshes)
-  const textures = await buildTextureInfos(gltf, json, materials)
+  const textures = await buildTextureInfos(gltf, json, materials, renderGpuPreview)
 
   return {
     fileName,
