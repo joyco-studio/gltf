@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { parseGltfValidationSchema } from './validation-schema'
+import { MAX_HIERARCHY_DEPTH } from './validation-schema-definition'
 import { validateGltf } from './validate'
 
 const document = {
@@ -26,6 +27,30 @@ function validate(operator: string, value: unknown, path = '$.nodes[1]', source:
 }
 
 describe('hierarchy rule schemas', () => {
+  it('rejects deeply nested expected trees before recursive parsing', () => {
+    let value: object = { name: 'Part' }
+    for (let i = 1; i < 3000; i++) value = { name: 'Part', children: [value] }
+    const parsed = parseGltfValidationSchema({ version: 1, rules: [
+      { id: 'deep', path: '$.nodes[0]', operator: 'matchesTree', value },
+    ] })
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) assert.match(parsed.errors[0], /Rule 1.*cannot exceed 128 node levels/)
+  })
+
+  it('accepts and evaluates the depth limit, and rejects one additional level', () => {
+    let value: object = { name: 'Part', children: [] }
+    for (let i = 1; i < MAX_HIERARCHY_DEPTH; i++) value = { name: 'Part', children: [value] }
+    const source = { nodes: Array.from({ length: MAX_HIERARCHY_DEPTH }, (_, id) => ({
+      name: 'Part', children: id + 1 < MAX_HIERARCHY_DEPTH ? [id + 1] : [],
+    })) }
+    assert.deepEqual(validate('matchesTree', value, '$.nodes[0]', source), [])
+    const parsed = parseGltfValidationSchema({ version: 1, rules: [
+      { id: 'deep', path: '$.nodes[0]', operator: 'matchesTree', value: { children: [value] } },
+    ] })
+    assert.equal(parsed.ok, false)
+    if (!parsed.ok) assert.match(parsed.errors[0], /cannot exceed 128 node levels/)
+  })
+
   it('requires the correct value for every operator and rejects extra keys', () => {
     for (const operator of ['hasChildren', 'hasDescendants', 'hasPath']) {
       for (const value of [undefined, null, [], [''], [3], 'Screen', {}]) {
@@ -153,6 +178,40 @@ describe('hierarchy validation', () => {
     assert.equal(validate('matchesTree', { children: [
       { name: 'Part', children: [] }, { name: 'Part', children: [] },
     ] }, '$.nodes[0]', source).length, 1)
+  })
+
+  it('matches thousands of duplicate siblings without comparing every pair', () => {
+    const width = 6000
+    let nameReads = 0
+    const source = { nodes: [
+      { name: 'Root', children: Array.from({ length: width }, (_, i) => i + 1) },
+      ...Array.from({ length: width }, () => ({ get name() { nameReads++; return 'Part' } })),
+    ] }
+    assert.deepEqual(validate('matchesTree', {
+      children: Array.from({ length: width }, () => ({ name: 'Part' })),
+    }, '$.nodes[0]', source), [])
+    // Include the built-in name validation reads; avoid a timing-dependent assertion.
+    assert.ok(nameReads <= width * 8, `Expected linear name comparisons, got ${nameReads}`)
+  })
+
+  it('reassigns multiple earlier matches when a constrained sibling needs them', () => {
+    const source = { nodes: [
+      { name: 'Root', children: [1, 2, 3] },
+      { name: 'Part', children: [4, 5] },
+      { name: 'Part', children: [6, 7] },
+      { name: 'Part', children: [8, 9] },
+      { name: 'X' }, { name: 'Y', children: [10] },
+      { name: 'X' }, { name: 'Y' },
+      { name: 'X', children: [11] }, { name: 'Y' },
+      { name: 'Detail' }, { name: 'Detail' },
+    ] }
+    // The first two patterns take #1 and #2; the last requires #1, moving
+    // the first to #2 and the second to #3 along an augmenting path.
+    assert.deepEqual(validate('matchesTree', { children: [
+      { name: 'Part', children: [{ name: 'X', children: [] }, { name: 'Y' }] },
+      { name: 'Part', children: [{ name: 'X' }, { name: 'Y', children: [] }] },
+      { name: 'Part', children: [{ name: 'X', children: [] }, { name: 'Y', children: [{ name: 'Detail' }] }] },
+    ] }, '$.nodes[0]', source), [])
   })
 
   it('reports malformed graphs without hanging or passing a partial traversal', () => {

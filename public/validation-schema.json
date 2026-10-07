@@ -89,7 +89,7 @@
                   }
                 },
                 "additionalProperties": false,
-                "description": "Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf."
+                "description": "Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf. At most 128 node levels, counting the selected root as level 1."
               }
             },
             "required": [

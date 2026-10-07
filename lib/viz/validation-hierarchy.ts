@@ -78,20 +78,34 @@ function matchChildren(
   matches: (id: number, tree: GltfHierarchyTree) => boolean
 ) {
   const assigned = new Map<number, number>()
-  function assign(index: number, seen: Set<number>): boolean {
-    for (const id of actual) {
-      if (seen.has(id) || !matches(id, expected[index])) continue
-      seen.add(id)
-      const previous = assigned.get(id)
-      if (previous === undefined || assign(previous, seen)) {
-        assigned.set(id, index)
+  const unused = new Set(actual)
+  function assign(index: number): boolean {
+    const queue = [index]
+    const previous = new Map<number, { index: number; id: number }>()
+    for (const current of queue) {
+      // Identical siblings should consume free matches without displacing any
+      // earlier assignment. Reassign only when a constrained branch needs it.
+      for (const id of unused) {
+        if (!matches(id, expected[current])) continue
+        unused.delete(id)
+        assigned.set(id, current)
+        let step = previous.get(current)
+        while (step) {
+          assigned.set(step.id, step.index)
+          step = previous.get(step.index)
+        }
         return true
+      }
+      for (const [id, occupant] of assigned) {
+        if (occupant === index || previous.has(occupant) || !matches(id, expected[current])) continue
+        previous.set(occupant, { index: current, id })
+        queue.push(occupant)
       }
     }
     return false
   }
-  const missing = expected.filter((_, index) => !assign(index, new Set()))
-  return { missing, unexpected: actual.filter((id) => !assigned.has(id)) }
+  const missing = expected.filter((_, index) => !assign(index))
+  return { missing, unexpected: [...unused] }
 }
 
 function evaluateHierarchy(

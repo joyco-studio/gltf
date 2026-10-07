@@ -83,6 +83,23 @@ describe('/api/validate CORS', () => {
 })
 
 describe('/api/validate custom schemas', () => {
+  it('returns a schema error instead of throwing for deeply nested expected trees', async () => {
+    const depth = 3000
+    // Build valid JSON iteratively so JSON.stringify's own depth limit is irrelevant.
+    const tree = '{"name":"Part","children":['.repeat(depth) +
+      '{"name":"Part"}' + ']}'.repeat(depth)
+    const response = await POST(new Request('https://gltf.joyco.studio/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: `{"document":{},"schema":{"version":1,"rules":[{"id":"deep","path":"$.nodes[0]","operator":"matchesTree","value":${tree}}]}}`,
+    }))
+    assert.equal(response.status, 400)
+    const [issue] = await response.json()
+    assert.equal(issue.title, 'Invalid validation schema')
+    assert.match(issue.description, /cannot exceed 128 node levels/)
+    assertCorsHeaders(response)
+  })
+
   it('applies hierarchy rules through the same public API contract', async () => {
     const response = await POST(new Request('https://gltf.joyco.studio/api/validate', {
       method: 'POST',

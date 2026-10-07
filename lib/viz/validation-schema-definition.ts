@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 const VALIDATION_SCHEMA_VERSION = 1 as const
 const MAX_REGEX_LENGTH = 256
+const MAX_HIERARCHY_DEPTH = 128
 
 const hierarchyName = z.string().min(1)
 const HierarchyChildSchema = z.strictObject({
@@ -14,7 +15,7 @@ const HierarchyTreeSchema = z.strictObject({
   name: hierarchyName.optional(),
   children: z.array(HierarchyChildSchema).optional(),
 }).meta({
-  description: 'Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf.',
+  description: `Exact, unordered children at each specified level. Omitted children leave descendants unchecked; an empty array requires a leaf. At most ${MAX_HIERARCHY_DEPTH} node levels, counting the selected root as level 1.`,
 })
 
 const level = z.enum(['error', 'warning']).default('error')
@@ -123,6 +124,7 @@ type GltfHierarchyTree = z.output<typeof HierarchyTreeSchema>
 export {
   createGltfValidationJsonSchema,
   GltfValidationSchemaDefinition,
+  MAX_HIERARCHY_DEPTH,
   MAX_REGEX_LENGTH,
   VALIDATION_SCHEMA_VERSION,
 }

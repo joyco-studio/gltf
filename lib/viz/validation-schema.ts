@@ -5,6 +5,7 @@ import { createHierarchyValidator } from './validation-hierarchy'
 
 import {
   GltfValidationSchemaDefinition,
+  MAX_HIERARCHY_DEPTH,
   MAX_REGEX_LENGTH,
   VALIDATION_SCHEMA_VERSION,
   type GltfValidationRule,
@@ -209,7 +210,29 @@ function collectSemanticErrors(source: unknown) {
   return errors
 }
 
+/** Bound recursive Zod parsing and tree matching before either touches the tree. */
+function collectHierarchyDepthErrors(source: unknown): string[] {
+  if (!isRecord(source) || !Array.isArray(source.rules)) return []
+  return source.rules.flatMap((rule, index) => {
+    if (!isRecord(rule) || rule.operator !== 'matchesTree') return []
+    const stack = [{ value: rule.value, depth: 1 }]
+    while (stack.length) {
+      const { value, depth } = stack.pop()!
+      if (!isRecord(value)) continue
+      if (depth > MAX_HIERARCHY_DEPTH) {
+        return [`Rule ${index + 1} operator “matchesTree” cannot exceed ${MAX_HIERARCHY_DEPTH} node levels (counting the selected root as level 1).`]
+      }
+      if (Array.isArray(value.children)) {
+        for (const child of value.children) stack.push({ value: child, depth: depth + 1 })
+      }
+    }
+    return []
+  })
+}
+
 function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult {
+  const depthErrors = collectHierarchyDepthErrors(source)
+  if (depthErrors.length) return { ok: false, errors: depthErrors }
   const parsed = GltfValidationSchemaDefinition.safeParse(source)
   const structuralErrors = parsed.success
     ? []

@@ -241,6 +241,9 @@ case-sensitive source node names, independent of mesh names and loader renaming.
   ignoring sibling order but preserving duplicate counts. `children: []`
   requires a leaf; omitting `children` leaves that node's descendants unchecked.
   Duplicate sibling names are matched by their requested subtree structure.
+  Expected trees support up to 128 node levels, counting the selected root as
+  level 1. Deeper `matchesTree` values return a schema error before recursive
+  parsing; this limit does not restrict the model depth for `hasDescendants`.
 
 Hierarchy rules check node references, repeated children, multiple parents,
 and cycles across the source node graph before evaluating relationships.
