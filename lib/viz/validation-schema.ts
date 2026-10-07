@@ -1,9 +1,11 @@
 import { exec, type JsonValue, type Path } from 'jsonpath-rfc9535'
 import parseJsonPath from 'jsonpath-rfc9535/parser'
 import { RE2JS } from 're2js'
+import { createHierarchyValidator } from './validation-hierarchy'
 
 import {
   GltfValidationSchemaDefinition,
+  MAX_HIERARCHY_DEPTH,
   MAX_REGEX_LENGTH,
   VALIDATION_SCHEMA_VERSION,
   type GltfValidationRule,
@@ -35,6 +37,7 @@ interface ResolvedValue {
 interface RuleFailure {
   description: string
   matches?: ResolvedValue[]
+  references?: GltfValidationReference[]
 }
 
 const REFERENCE_KINDS = {
@@ -207,7 +210,29 @@ function collectSemanticErrors(source: unknown) {
   return errors
 }
 
+/** Bound recursive Zod parsing and tree matching before either touches the tree. */
+function collectHierarchyDepthErrors(source: unknown): string[] {
+  if (!isRecord(source) || !Array.isArray(source.rules)) return []
+  return source.rules.flatMap((rule, index) => {
+    if (!isRecord(rule) || rule.operator !== 'matchesTree') return []
+    const stack = [{ value: rule.value, depth: 1 }]
+    while (stack.length) {
+      const { value, depth } = stack.pop()!
+      if (!isRecord(value)) continue
+      if (depth > MAX_HIERARCHY_DEPTH) {
+        return [`Rule ${index + 1} operator “matchesTree” cannot exceed ${MAX_HIERARCHY_DEPTH} node levels (counting the selected root as level 1).`]
+      }
+      if (Array.isArray(value.children)) {
+        for (const child of value.children) stack.push({ value: child, depth: depth + 1 })
+      }
+    }
+    return []
+  })
+}
+
 function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult {
+  const depthErrors = collectHierarchyDepthErrors(source)
+  if (depthErrors.length) return { ok: false, errors: depthErrors }
   const parsed = GltfValidationSchemaDefinition.safeParse(source)
   const structuralErrors = parsed.success
     ? []
@@ -219,11 +244,20 @@ function parseGltfValidationSchema(source: unknown): ParseValidationSchemaResult
     : { ok: false, errors }
 }
 
-function evaluateRule(rule: GltfValidationRule, matches: ResolvedValue[]): RuleFailure | null {
+function evaluateRule(
+  rule: GltfValidationRule,
+  matches: ResolvedValue[],
+  validateHierarchy: ReturnType<typeof createHierarchyValidator>
+): RuleFailure | null {
   const values = matches.map(({ value }) => value)
   const expected = 'value' in rule ? rule.value : undefined
 
   switch (rule.operator) {
+    case 'hasChildren':
+    case 'hasDescendants':
+    case 'hasPath':
+    case 'matchesTree':
+      return validateHierarchy(rule, values)
     case 'exists': {
       const passed = expected ? matches.length > 0 : matches.length === 0
       return passed
@@ -348,6 +382,7 @@ function validateWithSchema(
   source: unknown,
   schema: GltfValidationSchema
 ): GltfValidationResult[] {
+  const validateHierarchy = createHierarchyValidator(source)
   return schema.rules.flatMap((rule) => {
     let matches: ResolvedValue[]
     try {
@@ -363,10 +398,10 @@ function validateWithSchema(
       ]
     }
 
-    const failure = evaluateRule(rule, matches)
+    const failure = evaluateRule(rule, matches, validateHierarchy)
     if (!failure) return []
 
-    const references = uniqueReferences(failure.matches)
+    const references = failure.references ?? uniqueReferences(failure.matches)
     const referenceText = references.length
       ? ` Affected: ${references.map(({ label }) => label).join(', ')}.`
       : ''

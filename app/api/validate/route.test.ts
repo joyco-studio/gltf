@@ -83,6 +83,60 @@ describe('/api/validate CORS', () => {
 })
 
 describe('/api/validate custom schemas', () => {
+  it('returns a schema error instead of throwing for deeply nested expected trees', async () => {
+    const depth = 3000
+    // Build valid JSON iteratively so JSON.stringify's own depth limit is irrelevant.
+    const tree = '{"name":"Part","children":['.repeat(depth) +
+      '{"name":"Part"}' + ']}'.repeat(depth)
+    const response = await POST(new Request('https://gltf.joyco.studio/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: `{"document":{},"schema":{"version":1,"rules":[{"id":"deep","path":"$.nodes[0]","operator":"matchesTree","value":${tree}}]}}`,
+    }))
+    assert.equal(response.status, 400)
+    const [issue] = await response.json()
+    assert.equal(issue.title, 'Invalid validation schema')
+    assert.match(issue.description, /cannot exceed 128 node levels/)
+    assertCorsHeaders(response)
+  })
+
+  it('applies hierarchy rules through the same public API contract', async () => {
+    const response = await POST(new Request('https://gltf.joyco.studio/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        document: {
+          scenes: [{ nodes: [0] }],
+          nodes: [{ name: 'Body', children: [1] }, { name: 'Screen' }],
+        },
+        schema: { version: 1, rules: [
+          { id: 'children', path: '$.nodes[0]', operator: 'hasChildren', value: ['Screen'] },
+          { id: 'descendants', path: '$.nodes[0]', operator: 'hasDescendants', value: ['Screen'] },
+          { id: 'path', path: '$.scenes[0]', operator: 'hasPath', value: ['Body', 'Screen'] },
+          { id: 'tree', path: '$.nodes[0]', operator: 'matchesTree', value: { children: [] } },
+        ] },
+      }),
+    }))
+    assert.equal(response.status, 200)
+    const [issue, ...rest] = await response.json()
+    assert.deepEqual(rest, [])
+    assert.equal(issue.ruleId, 'tree')
+    assert.equal(issue.type, 'error')
+    assert.deepEqual(issue.references.map(({ id }: { id: number }) => id), [0, 1])
+  })
+
+  it('rejects hierarchy values with the wrong operator-specific shape', async () => {
+    const response = await POST(new Request('https://gltf.joyco.studio/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document: {}, schema: { version: 1, rules: [
+        { id: 'tree', path: '$.nodes[0]', operator: 'matchesTree', value: ['Screen'] },
+      ] } }),
+    }))
+    assert.equal(response.status, 400)
+    assert.equal((await response.json())[0].title, 'Invalid validation schema')
+  })
+
   it('validates a wrapped glTF document with the supplied schema', async () => {
     const response = await POST(
       new Request('https://gltf.joyco.studio/api/validate', {
