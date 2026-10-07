@@ -57,19 +57,25 @@ describe('inspectGltf node types', () => {
 })
 
 describe('texture previews', () => {
-  function compressedGltf() {
-    const texture = new CompressedTexture([], 2048, 1024)
+  function compressedGltf(count = 1) {
+    const textures = Array.from({ length: count }, (_, id) => {
+      const texture = new CompressedTexture([], 2048, 1024)
+      texture.name = String(id)
+      return texture
+    })
     const gltf = {
       parser: {
         json: {
-          textures: [{ extensions: { KHR_texture_basisu: { source: 0 } } }],
+          textures: textures.map(() => ({
+            extensions: { KHR_texture_basisu: { source: 0 } },
+          })),
           images: [{ name: 'Compressed', mimeType: 'image/ktx2', bufferView: 0 }],
           bufferViews: [{ byteLength: 128 }],
         },
-        getDependency: async () => texture,
+        getDependency: async (_type: string, id: number) => textures[id],
       },
     } as unknown as GLTF
-    return { texture, gltf }
+    return { texture: textures[0], gltf }
   }
 
   it('uses the decoded KTX2 texture for a bounded GPU thumbnail', async () => {
@@ -98,4 +104,40 @@ describe('texture previews', () => {
     assert.equal(document.textures[0].name, 'Compressed')
     assert.equal(document.textures[0].size, 128)
   })
+
+  for (const failure of ['sync', 'async']) {
+    it(`limits GPU previews to two and continues after a ${failure} failure`, async () => {
+      const { gltf } = compressedGltf(12)
+      const started: string[] = []
+      let active = 0
+      let peak = 0
+
+      const document = await inspectGltf(gltf, 'many-textures.glb', (source) => {
+        started.push(source.name)
+        if (source.name === '1' && failure === 'sync') {
+          throw new Error('Render failed')
+        }
+        active++
+        peak = Math.max(peak, active)
+        return new Promise<string>((resolve, reject) => {
+          setImmediate(() => {
+            active--
+            if (source.name === '1') reject(new Error('Readback failed'))
+            else resolve(`preview-${source.name}`)
+          })
+        })
+      })
+
+      assert.equal(peak, 2)
+      assert.equal(active, 0)
+      assert.equal(new Set(started).size, 12)
+      assert.deepEqual(
+        document.textures.map(({ id, previewUrl }) => ({ id, previewUrl })),
+        Array.from({ length: 12 }, (_, id) => ({
+          id,
+          previewUrl: id === 1 ? null : `preview-${id}`,
+        }))
+      )
+    })
+  }
 })

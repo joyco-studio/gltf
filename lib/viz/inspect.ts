@@ -461,6 +461,9 @@ async function buildTextureInfos(
 ) {
   const images = json.images ?? []
   const bufferViews = json.bufferViews ?? []
+  // Two serial queues bound GPU allocations while texture decoding stays parallel.
+  const previewQueues = [Promise.resolve(), Promise.resolve()]
+  let nextPreview = 0
 
   // slot usage across all materials, keyed by texture id
   const slotsByTexture = new Map<number, Set<string>>()
@@ -505,7 +508,13 @@ async function buildTextureInfos(
         height = textureImage?.height ?? 0
         previewUrl = renderTexturePreview(threeTexture?.image)
         if (!previewUrl && threeTexture && renderGpuPreview) {
-          previewUrl = await renderGpuPreview(threeTexture, PREVIEW_MAX_SIZE)
+          const slot = nextPreview++ % previewQueues.length
+          const preview = previewQueues[slot].then(() =>
+            renderGpuPreview(threeTexture, PREVIEW_MAX_SIZE)
+          )
+          // A failed preview must release its slot so later textures still run.
+          previewQueues[slot] = preview.then(() => undefined, () => undefined)
+          previewUrl = await preview
         }
       } catch {
         // Decode or preview failed — retain the row and any available metadata.
