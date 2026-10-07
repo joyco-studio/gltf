@@ -1,8 +1,52 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { BoxGeometry, Group, Mesh, PerspectiveCamera } from 'three/webgpu'
+import { BoxGeometry, Group, Mesh, PerspectiveCamera, Vector3 } from 'three/webgpu'
 
 import { ModelSystem } from './model-system'
+
+describe('ModelSystem.getInspectBox', () => {
+  it('sizes empty-node framing relative to the model without inventing geometry bounds', () => {
+    const root = new Group()
+    root.scale.setScalar(2)
+    const node = new Group()
+    node.position.set(3, 4, 5)
+    const mesh = new Mesh(new BoxGeometry(20, 10, 5))
+    root.add(node, mesh)
+    const model = new ModelSystem()
+    model.current = {
+      root,
+      gltf: { parser: { associations: new Map([[node, { nodes: 7 }]]) } },
+    } as unknown as NonNullable<ModelSystem['current']>
+
+    const box = model.getInspectBox({ kind: 'node', id: 7, name: 'empty' })!
+    assert.deepEqual(box.getCenter(new Vector3()).toArray(), [6, 8, 10])
+    assert.deepEqual(box.getSize(new Vector3()).toArray(), [4, 4, 4])
+    assert.equal(model.getElementTransformInfo({ kind: 'node', id: 7 })?.bounds, null)
+    assert.equal(model.getInspectBox({ kind: 'node', id: 99, name: 'missing' }), null)
+    assert.equal(model.getInspectBox({ kind: 'material', id: 99, name: 'unused' }), null)
+    mesh.geometry.dispose()
+  })
+
+  it('keeps geometry bounds for groups with mesh descendants', () => {
+    const root = new Group()
+    const node = new Group()
+    node.position.set(10, 0, 0)
+    const mesh = new Mesh(new BoxGeometry(2, 4, 6))
+    mesh.position.set(0, 5, 0)
+    node.add(mesh)
+    root.add(node)
+    const model = new ModelSystem()
+    model.current = {
+      root,
+      gltf: { parser: { associations: new Map([[node, { nodes: 7 }]]) } },
+    } as unknown as NonNullable<ModelSystem['current']>
+
+    const box = model.getInspectBox({ kind: 'node', id: 7, name: 'group' })!
+    assert.deepEqual(box.getCenter(new Vector3()).toArray(), [10, 5, 0])
+    assert.deepEqual(box.getSize(new Vector3()).toArray(), [2, 4, 6])
+    mesh.geometry.dispose()
+  })
+})
 
 describe('ModelSystem.getNodeTargetForObject', () => {
   it('resolves a primitive hit to its owning glTF node', () => {

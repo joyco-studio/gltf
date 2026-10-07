@@ -187,8 +187,8 @@ class ControlSystem
 
   /**
    * Enter inspection: orbit the given item, focus its world box and fit the
-   * camera to an inspect radius computed from the item's own extents. A
-   * transform-only node has no box, so it enters inspection without moving.
+   * camera to its framing bounds, including an origin-centered fallback for
+   * transform-only nodes supplied by the model.
    */
   inspect(target: InspectTarget, box: Box3 | null) {
     this.setMode('orbit')
