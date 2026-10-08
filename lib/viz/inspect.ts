@@ -1,5 +1,6 @@
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import type { Texture } from 'three/webgpu'
+import { canvasToBlob } from './canvas-to-blob'
 
 import { validateGltf, type GltfValidationResult } from './validate'
 
@@ -422,10 +423,9 @@ function fileNameFromUri(uri: string) {
 
 /**
  * Renders a downscaled preview of a decoded texture image. Compressed
- * textures (e.g. KTX2 transcoded to GPU formats) have no drawable image and
- * return null.
+ * textures have no drawable image and use the optional GPU preview fallback.
  */
-function renderTexturePreview(image: unknown): string | null {
+async function renderTexturePreview(image: unknown): Promise<Blob | null> {
   if (typeof document === 'undefined') return null
   if (
     !(image instanceof HTMLImageElement) &&
@@ -448,19 +448,29 @@ function renderTexturePreview(image: unknown): string | null {
 
   try {
     context.drawImage(image, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/png')
+    return canvasToBlob(canvas)
   } catch {
     return null
   }
 }
 
+interface TexturePreviewOptions {
+  renderGpuPreview?: (texture: Texture, maxSize: number) => Promise<Blob | null>
+  /** The caller owns the URL and must release it when the document is discarded. */
+  createPreviewUrl?: (blob: Blob) => string | null
+}
+
 async function buildTextureInfos(
   gltf: GLTF,
   json: GltfJson,
-  materials: GltfMaterialInfo[]
+  materials: GltfMaterialInfo[],
+  { renderGpuPreview, createPreviewUrl }: TexturePreviewOptions
 ) {
   const images = json.images ?? []
   const bufferViews = json.bufferViews ?? []
+  // Two serial queues bound GPU allocations while texture decoding stays parallel.
+  const previewQueues = [Promise.resolve(), Promise.resolve()]
+  let nextPreview = 0
 
   // slot usage across all materials, keyed by texture id
   const slotsByTexture = new Map<number, Set<string>>()
@@ -503,9 +513,21 @@ async function buildTextureInfos(
           | undefined
         width = textureImage?.width ?? 0
         height = textureImage?.height ?? 0
-        previewUrl = renderTexturePreview(threeTexture?.image)
+        let preview = createPreviewUrl
+          ? await renderTexturePreview(threeTexture?.image)
+          : null
+        if (!preview && threeTexture && renderGpuPreview && createPreviewUrl) {
+          const slot = nextPreview++ % previewQueues.length
+          const job = previewQueues[slot].then(() =>
+            renderGpuPreview(threeTexture, PREVIEW_MAX_SIZE)
+          )
+          // A failed preview must release its slot so later textures still run.
+          previewQueues[slot] = job.then(() => undefined, () => undefined)
+          preview = await job
+        }
+        previewUrl = preview ? (createPreviewUrl?.(preview) ?? null) : null
       } catch {
-        // texture failed to decode — keep the row with whatever JSON tells us
+        // Decode or preview failed — retain the row and any available metadata.
       }
 
       const size =
@@ -586,7 +608,8 @@ function buildAnimationInfos(json: GltfJson) {
 
 async function inspectGltf(
   gltf: GLTF,
-  fileName: string
+  fileName: string,
+  previews: TexturePreviewOptions = {}
 ): Promise<GltfDocumentInfo> {
   const json = gltf.parser.json as GltfJson
 
@@ -597,7 +620,7 @@ async function inspectGltf(
   const meshes = buildMeshInfos(json, materialNames)
   const nodes = buildNodeInfos(json, meshes)
   const materials = buildMaterialInfos(json, meshes)
-  const textures = await buildTextureInfos(gltf, json, materials)
+  const textures = await buildTextureInfos(gltf, json, materials, previews)
 
   return {
     fileName,

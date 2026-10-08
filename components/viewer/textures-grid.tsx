@@ -87,7 +87,7 @@ function TextureCard({
         {/* checkerboard backdrop so alpha textures read correctly */}
         <div className="relative flex aspect-square items-center justify-center border-b bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--muted)_0%_25%,transparent_0%_50%)]">
           {texture.previewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- data URL preview generated client-side
+            // eslint-disable-next-line @next/next/no-img-element -- Blob URL preview generated client-side
             <img
               src={texture.previewUrl}
               alt={texture.name}
