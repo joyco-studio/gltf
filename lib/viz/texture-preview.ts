@@ -9,13 +9,14 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu'
 import { texture, uv } from 'three/tsl'
+import { canvasToBlob } from './canvas-to-blob'
 
 /** Read a thumbnail through the same backend that decoded the model's textures. */
 async function renderGpuTexturePreview(
   source: Texture,
   renderer: WebGPURenderer,
   maxSize: number
-): Promise<string | null> {
+): Promise<Blob | null> {
   const image = source.image as { width?: number; height?: number } | undefined
   if (!image?.width || !image.height) return null
 
@@ -65,7 +66,7 @@ async function renderGpuTexturePreview(
       rgba.data.set(pixels.subarray(offset, offset + width * 4), y * width * 4)
     }
     context.putImageData(rgba, 0, 0)
-    return canvas.toDataURL('image/png')
+    return canvasToBlob(canvas)
   } finally {
     target.dispose()
     material.dispose()

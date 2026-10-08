@@ -80,13 +80,20 @@ describe('texture previews', () => {
 
   it('uses the decoded KTX2 texture for a bounded GPU thumbnail', async () => {
     const { texture, gltf } = compressedGltf()
-    const document = await inspectGltf(gltf, 'compressed.glb', async (source, maxSize) => {
-      assert.equal(source, texture)
-      assert.equal(maxSize, 256)
-      return 'data:image/png;base64,preview'
+    const preview = new Blob(['preview'], { type: 'image/png' })
+    const document = await inspectGltf(gltf, 'compressed.glb', {
+      createPreviewUrl: (blob) => {
+        assert.equal(blob, preview)
+        return 'blob:preview'
+      },
+      renderGpuPreview: async (source, maxSize) => {
+        assert.equal(source, texture)
+        assert.equal(maxSize, 256)
+        return preview
+      },
     })
 
-    assert.equal(document.textures[0].previewUrl, 'data:image/png;base64,preview')
+    assert.equal(document.textures[0].previewUrl, 'blob:preview')
     assert.equal(document.textures[0].mimeType, 'image/ktx2')
     assert.equal(document.textures[0].width, 2048)
     assert.equal(document.textures[0].height, 1024)
@@ -95,8 +102,11 @@ describe('texture previews', () => {
 
   it('keeps texture metadata when GPU preview generation fails', async () => {
     const { gltf } = compressedGltf()
-    const document = await inspectGltf(gltf, 'compressed.glb', async () => {
-      throw new Error('Readback failed')
+    const document = await inspectGltf(gltf, 'compressed.glb', {
+      createPreviewUrl: () => assert.fail('Failed previews must not create URLs'),
+      renderGpuPreview: async () => {
+        throw new Error('Readback failed')
+      },
     })
 
     assert.equal(document.textures[0].previewUrl, null)
@@ -112,20 +122,28 @@ describe('texture previews', () => {
       let active = 0
       let peak = 0
 
-      const document = await inspectGltf(gltf, 'many-textures.glb', (source) => {
-        started.push(source.name)
-        if (source.name === '1' && failure === 'sync') {
-          throw new Error('Render failed')
-        }
-        active++
-        peak = Math.max(peak, active)
-        return new Promise<string>((resolve, reject) => {
-          setImmediate(() => {
-            active--
-            if (source.name === '1') reject(new Error('Readback failed'))
-            else resolve(`preview-${source.name}`)
+      const urls = new Map<Blob, string>()
+      const document = await inspectGltf(gltf, 'many-textures.glb', {
+        createPreviewUrl: (blob) => urls.get(blob)!,
+        renderGpuPreview: (source) => {
+          started.push(source.name)
+          if (source.name === '1' && failure === 'sync') {
+            throw new Error('Render failed')
+          }
+          active++
+          peak = Math.max(peak, active)
+          return new Promise<Blob>((resolve, reject) => {
+            setImmediate(() => {
+              active--
+              if (source.name === '1') reject(new Error('Readback failed'))
+              else {
+                const blob = new Blob([source.name], { type: 'image/png' })
+                urls.set(blob, `preview-${source.name}`)
+                resolve(blob)
+              }
+            })
           })
-        })
+        },
       })
 
       assert.equal(peak, 2)

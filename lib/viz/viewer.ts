@@ -68,6 +68,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
 
   private systems: System[]
   private disposer = new Disposer()
+  private documentPreviews = new Disposer()
+  private pendingPreviews: Disposer | null = null
   private timer = new Timer()
   private frameHandle: number | null = null
   private resizeObserver: ResizeObserver
@@ -201,35 +203,51 @@ class Viewer extends EventEmitter<ViewerEvents> {
     loadModel: () => Promise<LoadedModel | null>,
     sourceUrl: string | null
   ) {
+    if (this.disposer.disposed) return
+    const previews = new Disposer()
+    this.pendingPreviews?.dispose()
+    this.pendingPreviews = previews
     this.setSnapshot({ status: 'loading', error: null })
     try {
       const loaded = await loadModel()
-      if (!loaded || this.disposer.disposed) return // superseded or unmounted
+      if (!loaded || previews.disposed) return // superseded or unmounted
 
       const source = loaded.gltf.parser.json as unknown
       const document = await inspectGltf(
         loaded.gltf,
         loaded.fileName,
-        (texture, maxSize) => {
-          if (this.disposer.disposed || this.model.current !== loaded) {
-            return Promise.resolve(null)
-          }
-          return renderGpuTexturePreview(texture, this.render.renderer, maxSize)
+        {
+          renderGpuPreview: (texture, maxSize) => {
+            if (previews.disposed || this.model.current !== loaded) {
+              return Promise.resolve(null)
+            }
+            return renderGpuTexturePreview(texture, this.render.renderer, maxSize)
+          },
+          createPreviewUrl: (blob) => {
+            if (previews.disposed) return null
+            const url = URL.createObjectURL(blob)
+            previews.add(() => URL.revokeObjectURL(url))
+            return url
+          },
         }
       )
-      if (this.disposer.disposed || this.model.current !== loaded) return
+      if (previews.disposed || this.model.current !== loaded) return
       // The schema may have changed while texture inspection was awaiting;
       // derive findings from the latest applied rules at commit time.
       document.validationIssues = validateGltf(source, this.validationSchema)
       this.validationSource = source
+      this.documentPreviews.dispose()
+      this.documentPreviews = previews
       this.setSnapshot({ status: 'ready', document, sourceUrl })
     } catch (error) {
-      if (this.disposer.disposed) return
+      if (previews.disposed) return
       this.setSnapshot({
         status: this.snapshot.document ? 'ready' : 'error',
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
+      if (this.pendingPreviews === previews) this.pendingPreviews = null
+      if (this.documentPreviews !== previews) previews.dispose()
       // idle showcase only while nothing is loaded
       if (!this.disposer.disposed) {
         this.controls.setIdle(this.snapshot.document === null)
@@ -239,6 +257,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
 
   dispose() {
     this.stop()
+    this.pendingPreviews?.dispose()
+    this.documentPreviews.dispose()
     try {
       this.disposer.dispose()
     } finally {
