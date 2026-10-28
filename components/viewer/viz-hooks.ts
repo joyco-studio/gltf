@@ -52,7 +52,7 @@ function useGridVisible(): boolean {
   )
 }
 
-/** React's view into the AxesSystem visibility. */
+/** React's view into the coordinate helper's visibility. */
 function useAxesVisible(): boolean {
   const { viewer } = useViewer()
 

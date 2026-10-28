@@ -20,6 +20,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import type { InspectTarget } from '../controls/control-system'
 import { Disposer, disposeObject3D } from '../disposer'
 import { createGltfFileSet } from '../file-set'
+import { getRemoteModelSize } from '../model-size'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
@@ -32,6 +33,7 @@ interface LoadedModel {
   files: File[]
   root: Object3D
   fileName: string
+  totalSize: number | null
 }
 
 /**
@@ -159,7 +161,9 @@ class ModelSystem implements System {
         disposeObject3D(gltf.scene)
         return null
       }
-      return this.swap(gltf, fileSet.rootFile.name, undefined, files)
+      return this.swap(
+        gltf, fileSet.rootFile.name, fileSet.totalSize, undefined, files
+      )
     } finally {
       fileSet.revoke()
     }
@@ -169,12 +173,20 @@ class ModelSystem implements System {
     const loadId = ++this.loadId
     const loader = await this.createLoader()
     if (!loader) return null
-    const gltf = await loader.loadAsync(url)
+    let rootSize: number | null = null
+    const gltf = await loader.loadAsync(url, (event) => {
+      rootSize = event.loaded
+    })
+    const totalSize = await getRemoteModelSize(
+      gltf.parser.json,
+      rootSize,
+      new URL(url, window.location.href).href
+    )
     if (loadId !== this.loadId) {
       disposeObject3D(gltf.scene)
       return null
     }
-    return this.swap(gltf, url.split('/').pop() ?? url, transform)
+    return this.swap(gltf, url.split('/').pop() ?? url, totalSize, transform)
   }
 
   private get associations() {
@@ -445,6 +457,7 @@ class ModelSystem implements System {
   private swap(
     gltf: GLTF,
     fileName: string,
+    totalSize: number | null,
     transform?: ModelTransform,
     files: File[] = []
   ) {
@@ -461,7 +474,7 @@ class ModelSystem implements System {
     if (transform?.position) gltf.scene.position.fromArray(transform.position)
     this.container.add(gltf.scene)
     this.modelDisposer.add(() => disposeObject3D(gltf.scene))
-    this.current = { gltf, root: gltf.scene, fileName, files }
+    this.current = { gltf, root: gltf.scene, fileName, files, totalSize }
     this.viewer.controls.frame(gltf.scene)
     this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
     return this.current

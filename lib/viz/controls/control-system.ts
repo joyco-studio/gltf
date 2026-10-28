@@ -181,6 +181,7 @@ class ControlSystem
     this.capDolly(distance)
     this.context.worldRadius = Math.max(maxSize / 2, 0.001)
     this.viewer.grid.fit(this.context.worldRadius)
+    this.viewer.axes.fit(this.context.worldRadius)
     this.viewer.environment.fit(this.context.worldRadius)
     this.active.syncWithCamera()
   }

@@ -12,6 +12,8 @@ interface GltfFileSet {
   manager: LoadingManager
   /** Object URL of the root file — pass to GLTFLoader.load. */
   rootUrl: string
+  /** Combined size of the root and unique sibling files used by the loader. */
+  readonly totalSize: number | null
   /** Revoke every object URL created for this set. */
   revoke: () => void
 }
@@ -30,8 +32,11 @@ function createGltfFileSet(files: File[]): GltfFileSet | null {
 
   const byName = new Map(files.map((file) => [file.name, file]))
   const objectUrls: string[] = []
+  const usedFiles = new Set([rootFile])
+  let hasUnknownSize = false
 
   const createUrl = (file: File) => {
+    usedFiles.add(file)
     const url = URL.createObjectURL(file)
     objectUrls.push(url)
     return url
@@ -45,6 +50,7 @@ function createGltfFileSet(files: File[]): GltfFileSet | null {
     // last path segment rather than the full URL.
     const name = decodeURIComponent(url.split('/').pop() ?? '')
     const file = byName.get(name)
+    if (!file && !url.startsWith('blob:')) hasUnknownSize = true
     return file ? createUrl(file) : url
   })
 
@@ -52,6 +58,11 @@ function createGltfFileSet(files: File[]): GltfFileSet | null {
     rootFile,
     manager,
     rootUrl: createUrl(rootFile),
+    get totalSize() {
+      return hasUnknownSize
+        ? null
+        : [...usedFiles].reduce((total, file) => total + file.size, 0)
+    },
     revoke: () => {
       for (const url of objectUrls) URL.revokeObjectURL(url)
       objectUrls.length = 0

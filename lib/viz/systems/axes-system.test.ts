@@ -77,7 +77,9 @@ describe('AxesSystem', () => {
     assert.equal(axes.isVisible, true)
     assert.deepEqual(visibilityChanges, [true, false, true])
     publishInspection(null)
-    assert.equal(helper.visible, false)
+    assert.equal(helper.visible, true)
+    assert.deepEqual(helper.position.toArray(), [0, 0, 0])
+    assert.deepEqual(helper.quaternion.toArray(), [0, 0, 0, 1])
     axes.setVisible(false)
     publishInspection(target)
     assert.equal(helper.visible, true)
@@ -140,6 +142,38 @@ describe('AxesSystem', () => {
         node.getWorldQuaternion(node.quaternion.clone())
       ) < 1e-10
     )
+
+    axes.toggle()
+    assert.equal(helper.visible, true)
+    axes.fit(10)
+    // Camera changes retain the inspected element's frame.
+    const target = { kind: 'node', id: 7, name: 'offset-origin' } as const
+    publishInspection(target)
+    assert.deepEqual(helper.position.toArray(), [4, 5, 6])
+    assert.ok(helper.quaternion.angleTo(node.getWorldQuaternion(node.quaternion.clone())) < 1e-10)
+    // Exiting inspection restores world origin and the whole-model scale.
+    publishInspection(null)
+    assert.equal(helper.visible, true)
+    assert.deepEqual(helper.position.toArray(), [0, 0, 0])
+    assert.deepEqual(helper.quaternion.toArray(), [0, 0, 0, 1])
+    assert.equal(helper.scale.x, 14)
+    // The same toggle turns world axes off and on without an inspected object.
+    axes.toggle()
+    assert.equal(helper.visible, false)
+    axes.toggle()
+    assert.equal(helper.visible, true)
+    axes.fit(2)
+    assert.equal(helper.scale.x, 2.8)
+    // Inspecting again automatically switches the enabled helper to local axes.
+    publishInspection(target)
+    assert.equal(helper.visible, true)
+    assert.deepEqual(helper.position.toArray(), [4, 5, 6])
+    assert.ok(helper.quaternion.angleTo(node.getWorldQuaternion(node.quaternion.clone())) < 1e-10)
+    axes.toggle()
+    publishInspection(target)
+    assert.equal(helper.visible, false)
+    publishInspection(null)
+    assert.equal(helper.visible, false)
 
     axes.dispose()
   })

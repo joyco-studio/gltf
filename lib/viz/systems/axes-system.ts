@@ -39,18 +39,16 @@ const RENDER_ORDER = 999
 const UP = new Vector3(0, 1, 0)
 
 /**
- * Local-frame axes for the inspected element: an RGB arrow triad anchored at
- * the element's world-space origin, oriented by its world rotation. Resources
- * without one exact transform retain the representative bounds behavior.
- * Event-driven off the inspect state (same pattern as HighlightSystem); the
- * toolbar toggles user visibility.
+ * One reusable RGB triad for the world origin or an inspected element's frame.
+ * Resources without one exact transform use their representative bounds.
+ * Leaving element inspection falls back to world axes so the helper persists.
  */
 class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   private viewer!: Viewer
   private group = new Group()
   private disposer = new Disposer()
-  /** Toolbar intent. */
   private enabled = false
+  private worldLength = 1
   /** Whether an inspected element is currently positioned. */
   private hasTarget = false
   private inspecting: InspectTarget | null = null
@@ -70,7 +68,6 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     )
   }
 
-  /** Reflects the toolbar toggle, not the live render state. */
   get isVisible() {
     return this.enabled
   }
@@ -86,7 +83,13 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
     this.setVisible(!this.enabled)
   }
 
-  /** Anchor the triad on the inspected element, or drop it if none. */
+  /** Keep world axes useful across model scales, independently of inspection. */
+  fit(worldRadius: number) {
+    this.worldLength = Math.max(worldRadius * 2 * LENGTH_FACTOR, 0.001)
+    this.refresh()
+  }
+
+  /** Use the inspected element's local frame, or the world origin otherwise. */
   private sync(inspecting: InspectTarget | null) {
     const newInspection = inspecting !== this.inspecting
     this.inspecting = inspecting
@@ -126,7 +129,12 @@ class AxesSystem extends EventEmitter<{ change: boolean }> implements System {
   }
 
   private refresh() {
-    this.group.visible = this.enabled && this.hasTarget
+    if (!this.inspecting) {
+      this.group.position.set(0, 0, 0)
+      this.group.quaternion.identity()
+      this.group.scale.setScalar(this.worldLength)
+    }
+    this.group.visible = this.enabled && (!this.inspecting || this.hasTarget)
   }
 
   /** A colored shaft + head, with +Y rotated onto `dir`. */

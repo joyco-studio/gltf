@@ -232,6 +232,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
         }
       )
       if (previews.disposed || this.model.current !== loaded) return
+      document.totalSize = loaded.totalSize
       // The schema may have changed while texture inspection was awaiting;
       // derive findings from the latest applied rules at commit time.
       document.validationIssues = validateGltf(source, this.validationSchema)

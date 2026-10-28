@@ -98,6 +98,7 @@ interface GltfSceneInfo {
 
 interface GltfDocumentInfo {
   fileName: string
+  totalSize: number | null
   scene: GltfSceneInfo
   /** Scene graph flattened to a DFS list — the source for the tree view. */
   nodes: GltfNodeInfo[]
@@ -624,6 +625,7 @@ async function inspectGltf(
 
   return {
     fileName,
+    totalSize: null,
     scene: {
       name: json.scenes?.[0]?.name ?? 'Scene',
       nodeCount: json.nodes?.length ?? 0,

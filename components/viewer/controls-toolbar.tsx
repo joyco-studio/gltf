@@ -44,6 +44,7 @@ function ControlsToolbar() {
   const controls = useControlsState()
   const gridVisible = useGridVisible()
   const axesVisible = useAxesVisible()
+  const axesLabel = controls.inspecting ? 'local axes' : 'world axes'
 
   // no document → idle showcase: the viewer auto-orbits, controls stay hidden
   if (!viewer || !snapshot.document) return null
@@ -164,23 +165,22 @@ function ControlsToolbar() {
             </TooltipContent>
           </Tooltip>
 
-          {controls.inspecting ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={axesVisible ? 'default' : 'accent'}
-                  size="icon-sm"
-                  onClick={() => viewer.axes.toggle()}
-                >
-                  <Axis3d />
-                  <span className="sr-only">Toggle element axes</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {axesVisible ? 'Hide element axes' : 'Show element axes'}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={axesVisible ? 'default' : 'accent'}
+                size="icon-sm"
+                onClick={() => viewer.axes.toggle()}
+                aria-label={`Toggle ${axesLabel}`}
+                aria-pressed={axesVisible}
+              >
+                <Axis3d />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {axesVisible ? 'Hide' : 'Show'} {axesLabel}
+            </TooltipContent>
+          </Tooltip>
         </Cluster>
       </div>
     </div>

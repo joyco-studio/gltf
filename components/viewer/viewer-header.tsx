@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Cluster, Filler } from "@/components/ui/cluster";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
-import { formatNumber } from "@/lib/format";
+import { formatBytes, formatNumber } from "@/lib/format";
 
 import { useFilePicker } from "./file-drop-zone";
 import { InfoPopover } from "./info-popover";
@@ -37,6 +37,18 @@ function ViewerHeader() {
               <span className="max-w-48 truncate text-foreground">
                 {document.fileName}
               </span>
+              <Badge
+                variant="card"
+                size="sm"
+                title={
+                  document.totalSize === null
+                    ? "Total model size unavailable"
+                    : "Total model size, including external assets"
+                }
+                aria-label={`Total model size: ${document.totalSize === null ? "unavailable" : formatBytes(document.totalSize)}`}
+              >
+                {formatBytes(document.totalSize)}
+              </Badge>
               <Badge variant="card" size="sm">
                 {formatNumber(document.scene.totalVertexCount)} verts
               </Badge>
