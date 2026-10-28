@@ -156,14 +156,14 @@ describe('AxesSystem', () => {
     assert.equal(helper.visible, true)
     assert.deepEqual(helper.position.toArray(), [0, 0, 0])
     assert.deepEqual(helper.quaternion.toArray(), [0, 0, 0, 1])
-    assert.equal(helper.scale.x, 14)
+    assert.ok(Math.abs(helper.scale.x - 5.6) < 1e-10)
     // The same toggle turns world axes off and on without an inspected object.
     axes.toggle()
     assert.equal(helper.visible, false)
     axes.toggle()
     assert.equal(helper.visible, true)
     axes.fit(2)
-    assert.equal(helper.scale.x, 2.8)
+    assert.ok(Math.abs(helper.scale.x - 1.12) < 1e-10)
     // Inspecting again automatically switches the enabled helper to local axes.
     publishInspection(target)
     assert.equal(helper.visible, true)

@@ -31,8 +31,8 @@ const AXIS_DIRECTIONS: Record<'x' | 'y' | 'z', Vector3> = {
 const SHAFT_RADIUS = 0.012
 const HEAD_RADIUS = 0.035
 const HEAD_LENGTH = 0.14
-// Span relative to the element's largest dimension, so axes reach past it.
-const LENGTH_FACTOR = 0.7
+// Span relative to the model or inspected element's largest dimension.
+const LENGTH_FACTOR = 0.28
 // Drawn on top of everything while inspecting, like a navigation gizmo.
 const RENDER_ORDER = 999
 
