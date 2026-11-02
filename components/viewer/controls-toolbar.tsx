@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Axis3d, Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
+import { Axis3d, Bone, Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Cluster } from '@/components/ui/cluster'
@@ -15,7 +15,12 @@ import {
 import type { Axis, ControlModeId } from '@/lib/viz/controls/types'
 
 import { useViewer } from './viewer-provider'
-import { useAxesVisible, useControlsState, useGridVisible } from './viz-hooks'
+import {
+  useAxesVisible,
+  useControlsState,
+  useGridVisible,
+  useSkeletonState,
+} from './viz-hooks'
 
 const MODES: {
   id: ControlModeId
@@ -44,6 +49,7 @@ function ControlsToolbar() {
   const controls = useControlsState()
   const gridVisible = useGridVisible()
   const axesVisible = useAxesVisible()
+  const skeleton = useSkeletonState()
   const axesLabel = controls.inspecting ? 'local axes' : 'world axes'
 
   // no document → idle showcase: the viewer auto-orbits, controls stay hidden
@@ -181,6 +187,25 @@ function ControlsToolbar() {
               {axesVisible ? 'Hide' : 'Show'} {axesLabel}
             </TooltipContent>
           </Tooltip>
+
+          {skeleton.available ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={skeleton.visible ? 'default' : 'accent'}
+                  size="icon-sm"
+                  onClick={() => viewer.skeleton.toggle()}
+                  aria-label="Toggle skeleton"
+                  aria-pressed={skeleton.visible}
+                >
+                  <Bone />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {skeleton.visible ? 'Hide' : 'Show'} skeleton
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
         </Cluster>
       </div>
     </div>
