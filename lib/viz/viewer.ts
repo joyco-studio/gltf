@@ -23,6 +23,7 @@ import {
 } from './systems/model-system'
 import { PickSystem } from './systems/pick-system'
 import { RenderSystem } from './systems/render-system'
+import { SkeletonSystem } from './systems/skeleton-system'
 
 type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
 
@@ -65,6 +66,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly pick: PickSystem
   readonly axes: AxesSystem
   readonly animations: AnimationSystem
+  readonly skeleton: SkeletonSystem
 
   private systems: System[]
   private disposer = new Disposer()
@@ -92,8 +94,10 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.pick = new PickSystem(canvas)
     this.axes = new AxesSystem()
     this.animations = new AnimationSystem()
+    this.skeleton = new SkeletonSystem()
 
-    // update order: controls (navigation) → animations (pose) → render last
+    // update order: controls (navigation) → animations (pose) → skeleton
+    // (follows the pose) → render last
     this.systems = [
       this.camera,
       this.controls,
@@ -106,6 +110,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.pick,
       this.axes,
       this.animations,
+      this.skeleton,
       this.render,
     ]
 

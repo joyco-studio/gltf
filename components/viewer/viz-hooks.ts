@@ -10,6 +10,10 @@ import {
   EMPTY_ANIMATIONS_SNAPSHOT,
   type AnimationsSnapshot,
 } from '@/lib/viz/systems/animation-system'
+import {
+  EMPTY_SKELETON_SNAPSHOT,
+  type SkeletonSnapshot,
+} from '@/lib/viz/systems/skeleton-system'
 
 import { useViewer } from './viewer-provider'
 
@@ -90,4 +94,30 @@ function useAnimationsState(): AnimationsSnapshot {
   )
 }
 
-export { useAnimationsState, useAxesVisible, useControlsState, useGridVisible }
+const getEmptySkeleton = () => EMPTY_SKELETON_SNAPSHOT
+
+/** React's view into the SkeletonSystem overlay state. */
+function useSkeletonState(): SkeletonSnapshot {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.skeleton.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.skeleton.getSnapshot() : getEmptySkeleton,
+    getEmptySkeleton
+  )
+}
+
+export {
+  useAnimationsState,
+  useAxesVisible,
+  useControlsState,
+  useGridVisible,
+  useSkeletonState,
+}
