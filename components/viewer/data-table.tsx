@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDown, ArrowUp, ChevronRight, ChevronsUpDown } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  ChevronsUpDown,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 import {
   Table,
@@ -11,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 
 import { InspectContextMenu } from "./inspect-context-menu";
@@ -46,6 +54,16 @@ interface TreeConfig<Row> {
   columnKey?: string;
 }
 
+/**
+ * Per-row show/hide: an eye toggle at the start of the row plus a Hide/Show
+ * action in its context menu. `inherited` rows render hidden because of a
+ * hidden ancestor — they dim but can still be hidden on their own.
+ */
+interface VisibilityConfig<Row> {
+  state: (row: Row) => "visible" | "hidden" | "inherited";
+  toggle: (row: Row) => void;
+}
+
 const INDENT_PER_DEPTH = 14; // px
 
 function compareValues(a: string | number, b: string | number) {
@@ -67,6 +85,7 @@ function DataTable<Row>({
   onRowClick,
   inspectRow,
   tree,
+  visibility,
 }: {
   data: Row[];
   columns: ColumnDef<Row>[];
@@ -83,6 +102,7 @@ function DataTable<Row>({
   inspectRow?: (row: Row) => { selection: Selection; name: string } | null;
   /** Render as a collapsible hierarchy instead of a flat list. */
   tree?: TreeConfig<Row>;
+  visibility?: VisibilityConfig<Row>;
 }) {
   const [sort, setSort] = React.useState<SortState | null>(null);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(
@@ -177,6 +197,7 @@ function DataTable<Row>({
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
+          {visibility && <TableHead className="w-0 pr-0" />}
           {columns.map((column) => (
             <TableHead
               key={column.key}
@@ -217,16 +238,42 @@ function DataTable<Row>({
         {visibleRows.map((row) => {
           const id = rowId(row);
           const selected = isSelected ? isSelected(row) : id === selectedId;
+          const visibilityState = visibility?.state(row);
           const tableRow = (
             <TableRow
               ref={selected ? selectedRowRef : undefined}
               data-state={selected ? "selected" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
+                "group/row",
                 onRowClick && "cursor-pointer",
                 selected && "bg-primary/10 hover:bg-primary/15",
               )}
             >
+              {visibility && (
+                <TableCell className="w-0 pr-0 align-top">
+                  <button
+                    type="button"
+                    aria-label={visibilityState === "hidden" ? "Show" : "Hide"}
+                    aria-pressed={visibilityState === "hidden"}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      visibility.toggle(row);
+                    }}
+                    className={cn(
+                      "flex text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground",
+                      visibilityState !== "hidden" &&
+                        "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
+                    )}
+                  >
+                    {visibilityState === "hidden" ? (
+                      <EyeOff className="size-3.5" />
+                    ) : (
+                      <Eye className="size-3.5" />
+                    )}
+                  </button>
+                </TableCell>
+              )}
               {columns.map((column) => (
                 <TableCell
                   key={column.key}
@@ -234,6 +281,9 @@ function DataTable<Row>({
                     "align-top font-mono text-xs",
                     column.align === "right" && "text-right",
                     column.className,
+                    visibilityState &&
+                      visibilityState !== "visible" &&
+                      "opacity-50",
                   )}
                 >
                   {tree && column.key === treeColumnKey ? (
@@ -277,7 +327,18 @@ function DataTable<Row>({
 
           const inspect = inspectRow?.(row);
           return inspect ? (
-            <InspectContextMenu key={id} {...inspect}>
+            <InspectContextMenu
+              key={id}
+              {...inspect}
+              actions={
+                visibility && (
+                  <ContextMenuItem onSelect={() => visibility.toggle(row)}>
+                    {visibilityState === "hidden" ? <Eye /> : <EyeOff />}
+                    {visibilityState === "hidden" ? "Show" : "Hide"}
+                  </ContextMenuItem>
+                )
+              }
+            >
               {tableRow}
             </InspectContextMenu>
           ) : (

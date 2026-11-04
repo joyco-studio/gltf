@@ -9,6 +9,7 @@ import type { GltfMeshInfo, GltfNodeInfo } from "@/lib/viz/inspect";
 import { DataTable, type ColumnDef } from "./data-table";
 import { NODE_TYPE_LABELS } from "./node-type";
 import { useViewer } from "./viewer-provider";
+import { useHiddenNodes } from "./viz-hooks";
 
 /** A scene node joined to its mesh's stats (null for transform/group nodes). */
 interface NodeRow extends GltfNodeInfo {
@@ -105,7 +106,15 @@ function HierarchyTable({
   nodes: GltfNodeInfo[];
   meshes: GltfMeshInfo[];
 }) {
-  const { hierarchyRevealRequest, selection, select, setTab } = useViewer();
+  const {
+    viewer,
+    snapshot,
+    hierarchyRevealRequest,
+    selection,
+    select,
+    setTab,
+  } = useViewer();
+  const hiddenNodes = useHiddenNodes();
 
   const rows = React.useMemo<NodeRow[]>(() => {
     const meshById = new Map(meshes.map((mesh) => [mesh.id, mesh]));
@@ -114,6 +123,22 @@ function HierarchyTable({
       mesh: node.meshId !== null ? (meshById.get(node.meshId) ?? null) : null,
     }));
   }, [nodes, meshes]);
+
+  // Nodes the user hid directly, plus their descendants (hidden with them).
+  const visibilityStates = React.useMemo(() => {
+    const states = new Map<number, "hidden" | "inherited">();
+    let hiddenDepth = Infinity;
+    for (const node of rows) {
+      if (node.depth <= hiddenDepth) hiddenDepth = Infinity;
+      if (hiddenNodes.has(node.id)) {
+        states.set(node.id, "hidden");
+        hiddenDepth = Math.min(hiddenDepth, node.depth);
+      } else if (node.depth > hiddenDepth) {
+        states.set(node.id, "inherited");
+      }
+    }
+    return states;
+  }, [rows, hiddenNodes]);
 
   return (
     <DataTable
@@ -145,6 +170,16 @@ function HierarchyTable({
         selection: { kind: "node", id: node.id },
         name: node.name,
       })}
+      // While a replacement model loads, these rows still describe the old
+      // document but node ids already resolve against the new model.
+      visibility={
+        snapshot.status === "loading"
+          ? undefined
+          : {
+              state: (node) => visibilityStates.get(node.id) ?? "visible",
+              toggle: (node) => viewer?.visibility.toggle(node.id),
+            }
+      }
     />
   );
 }
