@@ -4,6 +4,7 @@ import type { InspectTarget } from '../controls/control-system'
 import { Disposer } from '../disposer'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
+import { isWorldVisible } from './visibility-system'
 
 /**
  * Direct picking in the viewport: while ⌘ (Cmd) is held, the mesh under the
@@ -51,7 +52,8 @@ class PickSystem implements System {
     clientY: number
   ): (InspectTarget & { kind: 'node' }) | null {
     const model = this.viewer.model
-    const meshes = model.getAllMeshes()
+    // user-hidden meshes still raycast; only pick what's actually on screen
+    const meshes = model.getAllMeshes().filter(isWorldVisible)
     if (meshes.length === 0) return null
 
     const rect = this.canvas.getBoundingClientRect()

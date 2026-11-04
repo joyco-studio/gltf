@@ -478,6 +478,7 @@ class ModelSystem implements System {
     this.viewer.controls.frame(gltf.scene)
     this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
     this.viewer.skeleton.bind(gltf.scene, gltf.parser.associations)
+    this.viewer.visibility.bind(gltf.scene, gltf.parser.associations)
     return this.current
   }
 

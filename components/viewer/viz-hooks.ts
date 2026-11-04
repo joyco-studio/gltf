@@ -14,6 +14,7 @@ import {
   EMPTY_SKELETON_SNAPSHOT,
   type SkeletonSnapshot,
 } from '@/lib/viz/systems/skeleton-system'
+import { EMPTY_VISIBILITY_SNAPSHOT } from '@/lib/viz/systems/visibility-system'
 
 import { useViewer } from './viewer-provider'
 
@@ -114,10 +115,31 @@ function useSkeletonState(): SkeletonSnapshot {
   )
 }
 
+const getEmptyVisibility = () => EMPTY_VISIBILITY_SNAPSHOT
+
+/** React's view into the glTF node indices the user hid. */
+function useHiddenNodes(): ReadonlySet<number> {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.visibility.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.visibility.getSnapshot() : getEmptyVisibility,
+    getEmptyVisibility
+  )
+}
+
 export {
   useAnimationsState,
   useAxesVisible,
   useControlsState,
   useGridVisible,
   useSkeletonState,
+  useHiddenNodes,
 }
