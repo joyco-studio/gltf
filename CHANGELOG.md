@@ -1,5 +1,15 @@
 # gltf
 
+## 0.5.0
+
+### Minor Changes
+
+- 99c5577: Hide and show scene nodes from the hierarchy: an eye toggle on each row and a Hide/Show action in the right-click menu toggle the node's visibility in the viewport.
+
+### Patch Changes
+
+- 0f4e30c: Update three.js from 0.186.1 to 0.187.0.
+
 ## 0.4.0
 
 ### Minor Changes
