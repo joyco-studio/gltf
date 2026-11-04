@@ -106,8 +106,14 @@ function HierarchyTable({
   nodes: GltfNodeInfo[];
   meshes: GltfMeshInfo[];
 }) {
-  const { viewer, hierarchyRevealRequest, selection, select, setTab } =
-    useViewer();
+  const {
+    viewer,
+    snapshot,
+    hierarchyRevealRequest,
+    selection,
+    select,
+    setTab,
+  } = useViewer();
   const hiddenNodes = useHiddenNodes();
 
   const rows = React.useMemo<NodeRow[]>(() => {
@@ -164,10 +170,16 @@ function HierarchyTable({
         selection: { kind: "node", id: node.id },
         name: node.name,
       })}
-      visibility={{
-        state: (node) => visibilityStates.get(node.id) ?? "visible",
-        toggle: (node) => viewer?.visibility.toggle(node.id),
-      }}
+      // While a replacement model loads, these rows still describe the old
+      // document but node ids already resolve against the new model.
+      visibility={
+        snapshot.status === "loading"
+          ? undefined
+          : {
+              state: (node) => visibilityStates.get(node.id) ?? "visible",
+              toggle: (node) => viewer?.visibility.toggle(node.id),
+            }
+      }
     />
   );
 }
