@@ -83,7 +83,8 @@ describe('buildAdvisoryReport', () => {
     assert.equal(data.schema, REPORT_SCHEMA)
     assert.ok(report.indexOf('`orphan`') < report.indexOf('`skin`'))
     assert.deepEqual(orphan.actions, ['remove'])
-    assert.deepEqual(skin.actions, ['crop', 'flatten'])
+    // the mask describes the uncropped image, so flatten must come first
+    assert.deepEqual(skin.actions, ['flatten', 'crop'])
     assert.equal(skin.bytes.savings, 700)
   })
 
