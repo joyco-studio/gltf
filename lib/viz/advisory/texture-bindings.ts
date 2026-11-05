@@ -1,4 +1,4 @@
-import { WRAP_REPEAT, textureTransformMatrix } from './uv-coverage'
+import { WRAP_REPEAT, textureTransformMatrix, type UvTopology } from './uv-coverage'
 
 /**
  * Resolves, from raw glTF JSON, every way a texture gets sampled: which
@@ -28,6 +28,7 @@ interface TextureLayerRef {
   primitiveIndex: number
   texCoord: number
   transform: number[] | null
+  topology: UvTopology
 }
 
 interface TextureBindings {
@@ -90,8 +91,17 @@ function primitiveMaterials(primitive: BindingsPrimitive) {
   return materials
 }
 
-/** Primitive modes that sample textures across an area. */
-const TRIANGLE_MODES = new Set([4, 5, 6])
+/**
+ * How a glTF primitive mode samples its texture, as the loaded geometry is
+ * laid out: GLTFLoader converts strips and fans into indexed triangles.
+ */
+function primitiveTopology(mode = 4): UvTopology {
+  if (mode === 0) return 'points'
+  if (mode === 1) return 'lines'
+  if (mode === 2) return 'line-loop'
+  if (mode === 3) return 'line-strip'
+  return 'triangles'
+}
 
 /**
  * Recursively walks a material definition collecting `{ index }` texture
@@ -149,7 +159,6 @@ function resolveTextureBindings(json: BindingsJson): TextureBindings[] {
       meshes.forEach((mesh, meshId) => {
         mesh.primitives.forEach((primitive, primitiveIndex) => {
           if (!primitiveMaterials(primitive).has(materialId)) return
-          if (!TRIANGLE_MODES.has(primitive.mode ?? 4)) return
           for (const ref of bound) {
             const key = `${meshId}:${primitiveIndex}:${ref.texCoord}:${ref.transform?.join(',') ?? ''}`
             if (!layers.has(key)) {
@@ -158,6 +167,7 @@ function resolveTextureBindings(json: BindingsJson): TextureBindings[] {
                 primitiveIndex,
                 texCoord: ref.texCoord,
                 transform: ref.transform,
+                topology: primitiveTopology(primitive.mode),
               })
             }
             const userExists = users.some(

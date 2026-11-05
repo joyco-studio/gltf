@@ -38,7 +38,16 @@ interface UvLayer {
   transform: readonly number[] | null
   wrapS: number
   wrapT: number
+  /** Defaults to triangles. */
+  topology?: UvTopology
 }
+
+/**
+ * How a primitive's vertices sample the texture. Lines sample along each
+ * segment; points (three.js point sprites) map the whole texture onto every
+ * point, so any point use covers the entire texture.
+ */
+type UvTopology = 'triangles' | 'lines' | 'line-strip' | 'line-loop' | 'points'
 
 interface CoverageInput {
   width: number
@@ -133,9 +142,30 @@ function forEachFoldedTriangle(
   height: number,
   visit: TriangleVisitor
 ): FoldStats {
-  const { uv, index, transform, wrapS, wrapT } = layer
+  const { uv, index, transform, wrapS, wrapT, topology = 'triangles' } = layer
   const vertexCount = uv.length / 2
-  const triangleCount = Math.floor((index ? index.length : vertexCount) / 3)
+  const elementCount = index ? index.length : vertexCount
+  if (topology === 'points') {
+    return { tiling: false, saturated: elementCount > 0, offset: false }
+  }
+  // Segments become zero-area triangles (a, b, b), which the rasterizer
+  // samples as lines.
+  const triangleCount =
+    topology === 'triangles'
+      ? Math.floor(elementCount / 3)
+      : topology === 'lines'
+        ? Math.floor(elementCount / 2)
+        : topology === 'line-strip'
+          ? Math.max(0, elementCount - 1)
+          : elementCount > 1
+            ? elementCount
+            : 0
+  const element = (triangle: number, corner: number) => {
+    if (topology === 'triangles') return triangle * 3 + corner
+    const start = topology === 'lines' ? triangle * 2 : triangle
+    const end = topology === 'lines' ? start + 1 : (start + 1) % elementCount
+    return corner === 0 ? start : end
+  }
   const [a, b, c, d, e, f] = transform ?? [1, 0, 0, 0, 1, 0]
   const us = [0, 0, 0]
   const vs = [0, 0, 0]
@@ -150,7 +180,8 @@ function forEachFoldedTriangle(
     let maxV = -Infinity
     let valid = true
     for (let corner = 0; corner < 3; corner += 1) {
-      const vertex = index ? index[triangle * 3 + corner] : triangle * 3 + corner
+      const position = element(triangle, corner)
+      const vertex = index ? index[position] : position
       if (vertex >= vertexCount) {
         valid = false
         break
@@ -515,4 +546,4 @@ export {
   forEachFoldedTriangle,
   textureTransformMatrix,
 }
-export type { CoverageInput, CoverageResult, UvLayer, UvRect }
+export type { CoverageInput, CoverageResult, UvLayer, UvRect, UvTopology }

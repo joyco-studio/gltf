@@ -48,9 +48,13 @@ describe('resolveTextureBindings', () => {
     assert.equal(occlusion.wrapS, WRAP_REPEAT)
   })
 
-  it('ignores primitives that do not rasterize areas', () => {
+  it('keeps line primitives, tagged with how they sample', () => {
     assert.equal(linesOnly.referenced, true)
-    assert.equal(linesOnly.layers.length, 0)
+    assert.deepEqual(
+      linesOnly.layers.map(({ topology }) => topology),
+      ['lines']
+    )
+    assert.equal(base.layers[0].topology, 'triangles')
   })
 
   it('resolves the image through source-moving extensions', () => {

@@ -190,6 +190,39 @@ describe('computeCoverage', () => {
     assert.equal(line.coverage, 10 / 100)
   })
 
+  it('samples line primitives along their segments', () => {
+    const line = (topology: UvLayer['topology'], uv: number[]) =>
+      computeCoverage({
+        width: 10,
+        height: 10,
+        padding: 0,
+        layers: [
+          { uv: new Float32Array(uv), index: null, transform: null, wrapS: WRAP_CLAMP, wrapT: WRAP_CLAMP, topology },
+        ],
+      })
+    // one horizontal segment across row 5
+    assert.equal(line('lines', [0.05, 0.55, 0.95, 0.55]).coverage, 10 / 100)
+    // an L-shaped strip: row 5, then down column 9
+    assert.equal(line('line-strip', [0.05, 0.55, 0.95, 0.55, 0.95, 0.95]).coverage, 14 / 100)
+    // a loop closes back to its first vertex, adding the diagonal
+    assert.ok(
+      line('line-loop', [0.05, 0.55, 0.95, 0.55, 0.95, 0.95]).coverage >
+        line('line-strip', [0.05, 0.55, 0.95, 0.55, 0.95, 0.95]).coverage
+    )
+  })
+
+  it('treats points as covering the whole texture (sprites map all of it)', () => {
+    const result = computeCoverage({
+      width: 8,
+      height: 8,
+      padding: 0,
+      layers: [
+        { uv: new Float32Array([0.5, 0.5]), index: null, transform: null, wrapS: WRAP_REPEAT, wrapT: WRAP_REPEAT, topology: 'points' },
+      ],
+    })
+    assert.equal(result.coverage, 1)
+  })
+
   it('terminates on extreme UVs and treats them as covering everything', () => {
     const result = computeCoverage({
       width: 16,

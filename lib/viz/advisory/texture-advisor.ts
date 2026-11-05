@@ -75,7 +75,7 @@ function cropRect(bounds: UvRect, width: number, height: number): TexelRect | nu
   return rect
 }
 
-/** The runtime primitive (Mesh/Points/Line) GLTFLoader built for a glTF primitive. */
+/** The runtime primitive (Mesh/Points/Line) GLTFLoader built for a glTF primitive; all carry a geometry. */
 function primitiveObject(mesh: Object3D, primitiveIndex: number) {
   if ((mesh as Object3D & { isGroup?: boolean }).isGroup) {
     return mesh.children[primitiveIndex] ?? null
@@ -304,6 +304,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
           transform: ref.transform,
           wrapS: binding.wrapS,
           wrapT: binding.wrapT,
+          topology: ref.topology,
         })
       }
     }
