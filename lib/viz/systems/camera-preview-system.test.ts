@@ -73,6 +73,7 @@ describe('CameraPreviewSystem', () => {
     assert.equal(proxy.position.x, 11)
 
     assert.equal(system.start(1, 'Not a camera'), false)
+    system.dispose()
   })
 
   it('widens the fov so an authored frame fits a narrower viewport', () => {
@@ -90,6 +91,7 @@ describe('CameraPreviewSystem', () => {
       Math.tan(MathUtils.degToRad(proxy.fov) / 2) * proxy.aspect
     const authoredTan = Math.tan(MathUtils.degToRad(40) / 2) * 2
     assert.ok(Math.abs(horizontalTan - authoredTan) < 1e-9)
+    system.dispose()
   })
 
   it('expands an orthographic frame to the viewport aspect', () => {
@@ -104,6 +106,7 @@ describe('CameraPreviewSystem', () => {
       [proxy.left, proxy.right, proxy.top, proxy.bottom],
       [-2, 2, 2, -2]
     )
+    system.dispose()
   })
 
   it('detaches only on presses over the viewport', () => {
@@ -161,6 +164,32 @@ describe('CameraPreviewSystem', () => {
     // a fresh preview starts back at the authored zoom
     system.start(0, 'Shot')
     assert.equal(proxy.zoom, 2)
+    system.dispose()
+  })
+
+  it('closes on ESC unless something else already consumed it', () => {
+    const system = setup(new PerspectiveCamera(), { type: 'perspective' })
+    const escape = (init: EventInit = {}) =>
+      Object.assign(new Event('keydown', { cancelable: true, ...init }), {
+        key: 'Escape',
+      })
+    system.start(0, 'Shot')
+
+    // other keys keep the preview
+    window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'w' }))
+    assert.notEqual(system.getSnapshot(), null)
+
+    // a dialog/menu that handled ESC first keeps it too
+    const consumed = escape()
+    consumed.preventDefault()
+    window.dispatchEvent(consumed)
+    assert.notEqual(system.getSnapshot(), null)
+
+    const event = escape()
+    window.dispatchEvent(event)
+    assert.equal(system.getSnapshot(), null)
+    // consumed, so a running inspection doesn't also exit
+    assert.equal(event.defaultPrevented, true)
     system.dispose()
   })
 })

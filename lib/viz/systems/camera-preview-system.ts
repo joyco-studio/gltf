@@ -39,7 +39,8 @@ interface GltfCameraJson {
  *
  * The wheel zooms the preview (lerped, on top of the authored zoom) instead
  * of dollying the viewer camera. A press on the viewport detaches back to
- * the untouched viewer camera; UI clicks and keys leave the preview running.
+ * the untouched viewer camera, as does ESC; UI clicks and other keys leave
+ * the preview running.
  */
 class CameraPreviewSystem
   extends EventEmitter<{ change: PreviewSnapshot }>
@@ -74,11 +75,25 @@ class CameraPreviewSystem
       capture: true,
       passive: false,
     })
+    this.disposer.listen(window, 'keydown', this.onKeyDown)
     this.disposer.add(
       viewer.on('change', ({ status }) => {
         if (status === 'loading') this.stop()
       })
     )
+  }
+
+  /**
+   * ESC closes the preview. Bubble phase + `defaultPrevented`: an open
+   * dialog or menu consumes ESC first; consuming it here keeps a running
+   * inspection alive (its ESC handler skips prevented events).
+   */
+  private onKeyDown = (event: KeyboardEvent) => {
+    if (!this.source || event.key !== 'Escape' || event.defaultPrevented) {
+      return
+    }
+    event.preventDefault()
+    this.stop()
   }
 
   getSnapshot(): PreviewSnapshot {

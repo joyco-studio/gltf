@@ -5,6 +5,7 @@ import { Video, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Cluster } from '@/components/ui/cluster'
+import { Kbd } from '@/components/ui/kbd'
 
 import { useViewer } from './viewer-provider'
 import { useCameraPreview } from './viz-hooks'
@@ -35,7 +36,7 @@ function CameraPreviewFrame() {
   )
 }
 
-/** Flags the camera being looked through; a viewport click exits. */
+/** Flags the camera being looked through; a viewport click or ESC exits. */
 function CameraPreviewBanner() {
   const { viewer } = useViewer()
   const preview = useCameraPreview()
@@ -50,7 +51,7 @@ function CameraPreviewBanner() {
           <span className="max-w-56 truncate normal-case text-foreground">
             {preview.name}
           </span>
-          · click the scene to exit
+          · click or <Kbd>ESC</Kbd> to exit
         </p>
         <Button
           variant="accent"
