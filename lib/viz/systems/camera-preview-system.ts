@@ -13,6 +13,8 @@ interface CameraPreview {
    * the viewport's — glTF perspective cameras without `aspectRatio`.
    */
   aspect: number | null
+  /** Wheel zoom on top of the authored projection (1 = as authored). */
+  zoom: number
 }
 
 type PreviewSnapshot = CameraPreview | null
@@ -103,7 +105,12 @@ class CameraPreviewSystem
 
     this.source = source
     this.zoom = this.zoomTarget = 1
-    this.snapshot = { nodeId, name, aspect: this.authoredAspect(nodeId) }
+    this.snapshot = {
+      nodeId,
+      name,
+      aspect: this.authoredAspect(nodeId),
+      zoom: 1,
+    }
     this.sync()
     this.emit('change', this.snapshot)
     return true
@@ -124,10 +131,15 @@ class CameraPreviewSystem
     else if (event.deltaMode === 2) delta *= 100
     if (event.ctrlKey) delta *= 10 // trackpad pinch
 
-    this.zoomTarget = MathUtils.clamp(
+    const zoom = MathUtils.clamp(
       this.zoomTarget * Math.pow(ZOOM_BASE, delta * 0.01),
       ...ZOOM_RANGE
     )
+    if (zoom === this.zoomTarget || !this.snapshot) return
+    this.zoomTarget = zoom
+    // publish the destination, not every eased frame
+    this.snapshot = { ...this.snapshot, zoom }
+    this.emit('change', this.snapshot)
   }
 
   stop() {

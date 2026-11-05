@@ -6,6 +6,8 @@ import { Box, Group } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Cluster, Filler } from '@/components/ui/cluster'
+import { cn } from '@/lib/utils'
+import type { GltfCameraInfo } from '@/lib/viz/inspect'
 import type {
   ElementTransform,
   ElementTransformInfo,
@@ -13,7 +15,7 @@ import type {
 } from '@/lib/viz/systems/model-system'
 import type { InspectTarget } from '@/lib/viz/controls/control-system'
 
-import { useControlsState } from './viz-hooks'
+import { useCameraPreview, useControlsState } from './viz-hooks'
 import { NODE_TYPE_LABELS } from './node-type'
 import { useViewer, type HierarchySelection } from './viewer-provider'
 
@@ -23,6 +25,37 @@ const REFRESH_INTERVAL = 100
 function formatNumber(value: number, unit = '') {
   const normalized = Math.abs(value) < 0.0005 ? 0 : value
   return `${normalized.toFixed(3)}${unit}`
+}
+
+const toDegrees = (radians: number) => (radians * 180) / Math.PI
+
+interface FieldCell {
+  prefix?: string
+  value: React.ReactNode
+  /** Columns spanned out of three. */
+  span?: 1 | 2 | 3
+}
+
+const SPAN_CLASSES = { 1: '', 2: 'col-span-2', 3: 'col-span-3' }
+
+/** A labelled row of up to three cells, each with an optional muted prefix. */
+function FieldRow({ label, cells }: { label: string; cells: FieldCell[] }) {
+  return (
+    <div className="grid grid-cols-[4.25rem_repeat(3,minmax(0,1fr))] items-center gap-x-2 py-1">
+      <span className="text-muted-foreground">{label}</span>
+      {cells.map(({ prefix, value, span = 1 }, index) => (
+        <span
+          key={index}
+          className={cn('min-w-0 truncate tabular-nums', SPAN_CLASSES[span])}
+        >
+          {prefix ? (
+            <span className="mr-1 text-muted-foreground">{prefix}</span>
+          ) : null}
+          {value}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function VectorRow({
@@ -35,15 +68,133 @@ function VectorRow({
   unit?: string
 }) {
   return (
-    <div className="grid grid-cols-[4.25rem_repeat(3,minmax(0,1fr))] items-center gap-x-2 py-1">
-      <span className="text-muted-foreground">{label}</span>
-      {value.map((axisValue, index) => (
-        <span key={AXES[index]} className="min-w-0 tabular-nums">
-          <span className="mr-1 text-muted-foreground">{AXES[index]}</span>
-          {formatNumber(axisValue, unit)}
-        </span>
+    <FieldRow
+      label={label}
+      cells={value.map((axisValue, index) => ({
+        prefix: AXES[index],
+        value: formatNumber(axisValue, unit),
+      }))}
+    />
+  )
+}
+
+/** Full field of view (degrees) for a half-angle tangent. */
+const fovFromTan = (halfTan: number) => toDegrees(2 * Math.atan(halfTan))
+
+/**
+ * The camera's authored projection, plus the live preview zoom and the
+ * field of view / magnification it effectively renders with.
+ */
+function CameraSection({
+  camera,
+  zoom,
+}: {
+  camera: GltfCameraInfo
+  /** Preview wheel zoom while looking through this camera, else null. */
+  zoom: number | null
+}) {
+  const effectiveZoom = zoom ?? 1
+  const clip: FieldCell[] = [
+    { prefix: 'Near', value: formatNumber(camera.znear) },
+    {
+      prefix: 'Far',
+      value: camera.zfar === null ? '∞' : formatNumber(camera.zfar),
+    },
+  ]
+  const rows: { label: string; cells: FieldCell[] }[] =
+    camera.type === 'perspective'
+      ? [
+          { label: 'Projection', cells: [{ value: 'Perspective', span: 3 }] },
+          {
+            label: 'FOV',
+            cells: [
+              { prefix: 'Y', value: formatNumber(toDegrees(camera.yfov), '°') },
+              {
+                prefix: 'X',
+                value:
+                  camera.aspectRatio === null
+                    ? '—'
+                    : formatNumber(
+                        fovFromTan(
+                          Math.tan(camera.yfov / 2) * camera.aspectRatio
+                        ),
+                        '°'
+                      ),
+              },
+            ],
+          },
+          {
+            label: 'Aspect',
+            cells: [
+              {
+                value:
+                  camera.aspectRatio === null
+                    ? 'Viewport'
+                    : formatNumber(camera.aspectRatio),
+                span: 3,
+              },
+            ],
+          },
+          { label: 'Clip', cells: clip },
+          {
+            label: 'Zoom',
+            cells: [
+              { value: `${formatNumber(effectiveZoom)}×` },
+              {
+                prefix: 'FOV Y',
+                value: formatNumber(
+                  fovFromTan(Math.tan(camera.yfov / 2) / effectiveZoom),
+                  '°'
+                ),
+                span: 2,
+              },
+            ],
+          },
+        ]
+      : [
+          { label: 'Projection', cells: [{ value: 'Orthographic', span: 3 }] },
+          {
+            label: 'Magnify',
+            cells: [
+              { prefix: 'X', value: formatNumber(camera.xmag) },
+              { prefix: 'Y', value: formatNumber(camera.ymag) },
+            ],
+          },
+          {
+            label: 'Aspect',
+            cells: [
+              { value: formatNumber(camera.xmag / camera.ymag), span: 3 },
+            ],
+          },
+          { label: 'Clip', cells: clip },
+          {
+            label: 'Zoom',
+            cells: [
+              { value: `${formatNumber(effectiveZoom)}×` },
+              {
+                prefix: 'Mag Y',
+                value: formatNumber(camera.ymag / effectiveZoom),
+                span: 2,
+              },
+            ],
+          },
+        ]
+
+  return (
+    <section className="bg-background/85 px-3 py-2 font-mono text-[10px] backdrop-blur-md">
+      <h3 className="mb-1 flex items-center text-xs font-medium uppercase tracking-wide">
+        Camera
+        <Filler />
+        {zoom !== null ? (
+          <Badge variant="accent" size="sm">
+            Previewing
+          </Badge>
+        ) : null}
+      </h3>
+      {rows.map((row) => (
+        <FieldRow key={row.label} {...row} />
       ))}
-    </div>
+    </section>
   )
 }
 
@@ -55,7 +206,7 @@ function TransformSection({
   transform: ElementTransform
 }) {
   const rotation = transform.rotation.map(
-    (value) => (value * 180) / Math.PI
+    toDegrees
   ) as unknown as Vector3Tuple
 
   return (
@@ -143,10 +294,24 @@ function useElementTransform(target: InspectTarget | null) {
   return state?.key === key ? state.info : null
 }
 
-/** Floating read-only details inspector for the inspected scene element. */
+/**
+ * Floating read-only details inspector for the inspected scene element —
+ * or, with nothing inspected, the camera the viewport is looking through.
+ */
 function ElementInfoPanel() {
   const { revealInHierarchy, snapshot } = useViewer()
-  const inspecting = useControlsState().inspecting
+  const inspected = useControlsState().inspecting
+  const preview = useCameraPreview()
+  const previewNodeId = preview?.nodeId
+  const previewName = preview?.name
+  const inspecting = React.useMemo<InspectTarget | null>(
+    () =>
+      inspected ??
+      (previewNodeId !== undefined && previewName !== undefined
+        ? { kind: 'node', id: previewNodeId, name: previewName }
+        : null),
+    [inspected, previewNodeId, previewName]
+  )
   const transform = useElementTransform(inspecting)
 
   if (
@@ -163,11 +328,11 @@ function ElementInfoPanel() {
       ? snapshot.document.meshes.find(({ id }) => id === inspecting.id)
           ?.instances
       : undefined
-  const objectType =
+  const node =
     inspecting.kind === 'node'
       ? snapshot.document.nodes.find(({ id }) => id === inspecting.id)
-          ?.objectType
       : undefined
+  const objectType = node?.objectType
   const hierarchySelection: HierarchySelection = {
     kind: inspecting.kind,
     id: inspecting.id,
@@ -229,6 +394,13 @@ function ElementInfoPanel() {
           <VectorRow label="Center" value={transform.bounds.center} />
           <VectorRow label="Size" value={transform.bounds.size} />
         </section>
+      ) : null}
+
+      {node?.camera ? (
+        <CameraSection
+          camera={node.camera}
+          zoom={preview?.nodeId === node.id ? preview.zoom : null}
+        />
       ) : null}
 
       <UserDataSection userData={transform.userData} />

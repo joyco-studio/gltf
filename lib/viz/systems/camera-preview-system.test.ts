@@ -54,6 +54,7 @@ describe('CameraPreviewSystem', () => {
       nodeId: 0,
       name: 'Shot',
       aspect: null,
+      zoom: 1,
     })
 
     const proxy = system.camera
@@ -147,6 +148,8 @@ describe('CameraPreviewSystem', () => {
     canvas.dispatchEvent(wheel)
     assert.equal(controlsSawWheel, false)
     assert.equal(wheel.defaultPrevented, true)
+
+    assert.ok(Math.abs((system.getSnapshot()?.zoom ?? 0) - 1 / 0.95) < 1e-12)
 
     const proxy = system.camera as PerspectiveCamera
     system.update(1 / 60)

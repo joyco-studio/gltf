@@ -56,6 +56,60 @@ describe('inspectGltf node types', () => {
   })
 })
 
+describe('inspectGltf cameras', () => {
+  it('normalizes each node camera projection', async () => {
+    const gltf = {
+      parser: {
+        json: {
+          nodes: [
+            { name: 'Wide', camera: 0 },
+            { name: 'Free', camera: 1 },
+            { name: 'Ortho', camera: 2 },
+            { name: 'Empty' },
+          ],
+          cameras: [
+            {
+              type: 'perspective',
+              perspective: { yfov: 0.5, aspectRatio: 2.39, znear: 0.1, zfar: 100 },
+            },
+            { type: 'perspective', perspective: { yfov: 0.8, znear: 0.01 } },
+            {
+              type: 'orthographic',
+              orthographic: { xmag: 3, ymag: 2, znear: 0.1, zfar: 50 },
+            },
+          ],
+        },
+      },
+    } as unknown as GLTF
+
+    const document = await inspectGltf(gltf, 'cameras.gltf')
+
+    assert.deepEqual(
+      document.nodes.map(({ camera }) => camera),
+      [
+        {
+          id: 0,
+          type: 'perspective',
+          yfov: 0.5,
+          aspectRatio: 2.39,
+          znear: 0.1,
+          zfar: 100,
+        },
+        {
+          id: 1,
+          type: 'perspective',
+          yfov: 0.8,
+          aspectRatio: null,
+          znear: 0.01,
+          zfar: null,
+        },
+        { id: 2, type: 'orthographic', xmag: 3, ymag: 2, znear: 0.1, zfar: 50 },
+        null,
+      ]
+    )
+  })
+})
+
 describe('texture previews', () => {
   function compressedGltf(count = 1) {
     const textures = Array.from({ length: count }, (_, id) => {
