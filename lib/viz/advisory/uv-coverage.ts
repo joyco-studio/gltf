@@ -383,37 +383,56 @@ function rasterizeTriangle(
   }
 }
 
-/** Square (Chebyshev) dilation via two separable sliding-window passes. */
-function dilate(mask: Uint8Array, width: number, height: number, radius: number) {
-  if (radius <= 0) return mask
-  const horizontal = new Uint8Array(mask.length)
-  for (let y = 0; y < height; y += 1) {
-    const row = y * width
-    let count = 0
-    for (let x = 0; x < Math.min(radius, width); x += 1) count += mask[row + x]
-    for (let x = 0; x < width; x += 1) {
-      const enter = x + radius
-      const leave = x - radius - 1
-      if (enter < width) count += mask[row + enter]
-      if (leave >= 0) count -= mask[row + leave]
-      horizontal[row + x] = count > 0 ? 1 : 0
+/**
+ * One separable pass of a sliding-window max. On a wrapping axis the window
+ * continues past the edge onto the opposite side, the way a REPEAT sampler's
+ * filter footprint does.
+ */
+function dilateAxis(
+  source: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+  horizontal: boolean,
+  wrap: boolean
+) {
+  const result = new Uint8Array(source.length)
+  const lines = horizontal ? height : width
+  const length = horizontal ? width : height
+  // A window wider than the line already covers all of it.
+  const reach = Math.min(radius, length)
+  for (let line = 0; line < lines; line += 1) {
+    const at = (index: number) => {
+      if (index < 0 || index >= length) {
+        if (!wrap) return 0
+        index = ((index % length) + length) % length
+      }
+      return source[horizontal ? line * width + index : index * width + line]
     }
-  }
-  const result = new Uint8Array(mask.length)
-  for (let x = 0; x < width; x += 1) {
     let count = 0
-    for (let y = 0; y < Math.min(radius, height); y += 1) {
-      count += horizontal[y * width + x]
-    }
-    for (let y = 0; y < height; y += 1) {
-      const enter = y + radius
-      const leave = y - radius - 1
-      if (enter < height) count += horizontal[enter * width + x]
-      if (leave >= 0) count -= horizontal[leave * width + x]
-      result[y * width + x] = count > 0 ? 1 : 0
+    for (let index = -reach; index <= reach; index += 1) count += at(index)
+    for (let index = 0; index < length; index += 1) {
+      result[horizontal ? line * width + index : index * width + line] = count > 0 ? 1 : 0
+      count += at(index + reach + 1) - at(index - reach)
     }
   }
   return result
+}
+
+/**
+ * Square (Chebyshev) dilation via two separable sliding-window passes,
+ * wrapping around the axes whose samplers repeat.
+ */
+function dilate(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+  { wrapX = false, wrapY = false }: { wrapX?: boolean; wrapY?: boolean } = {}
+) {
+  if (radius <= 0) return mask
+  const horizontal = dilateAxis(mask, width, height, radius, true, wrapX)
+  return dilateAxis(horizontal, width, height, radius, false, wrapY)
 }
 
 function computeCoverage({
@@ -439,7 +458,14 @@ function computeCoverage({
   }
 
   if (saturated) mask.fill(1)
-  else mask = dilate(mask, width, height, padding)
+  else {
+    // Filtering near an edge of a REPEAT texture reads the opposite edge.
+    // (Mirrored edges reflect onto texels the gutter already covers.)
+    mask = dilate(mask, width, height, padding, {
+      wrapX: layers.some((layer) => layer.wrapS === WRAP_REPEAT),
+      wrapY: layers.some((layer) => layer.wrapT === WRAP_REPEAT),
+    })
+  }
 
   let used = 0
   let minX = width

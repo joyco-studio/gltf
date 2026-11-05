@@ -245,7 +245,38 @@ describe('textureTransformMatrix', () => {
   })
 })
 
+describe('repeat-edge sampling', () => {
+  it('carries the filter gutter across edges of a repeating texture', () => {
+    const repeat = computeCoverage({
+      width: 100,
+      height: 100,
+      padding: 2,
+      layers: [quad(0.5, 0.4, 1, 0.6)],
+    })
+    // the island ends at U=1, so filtering also reads the first columns
+    assert.equal(repeat.mask[50 * 100 + 0], 1)
+    assert.equal(repeat.mask[50 * 100 + 1], 1)
+    assert.equal(repeat.mask[50 * 100 + 2], 0)
+    assert.equal(repeat.bounds?.minU, 0)
+
+    const clamped = computeCoverage({
+      width: 100,
+      height: 100,
+      padding: 2,
+      layers: [quad(0.5, 0.4, 1, 0.6, { wrapS: WRAP_CLAMP, wrapT: WRAP_CLAMP })],
+    })
+    assert.equal(clamped.mask[50 * 100 + 0], 0)
+  })
+})
+
 describe('dilate', () => {
+  it('wraps around an axis when asked', () => {
+    const mask = new Uint8Array(5)
+    mask[4] = 1
+    assert.deepEqual([...dilate(mask, 5, 1, 1, { wrapX: true })], [1, 0, 0, 1, 1])
+    assert.deepEqual([...dilate(mask, 5, 1, 1)], [0, 0, 0, 1, 1])
+  })
+
   it('grows a single cell into a square of the radius', () => {
     const mask = new Uint8Array(25)
     mask[12] = 1

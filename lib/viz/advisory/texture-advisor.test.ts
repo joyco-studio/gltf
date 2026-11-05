@@ -136,4 +136,36 @@ describe('TextureAdvisor', () => {
     assert.equal(await advisor.exportReport(85), null, 'nothing once replaced')
     advisor.dispose()
   })
+
+  it('starts no worker work for a fetch that finishes after disposal', async (t) => {
+    // Pretend the browser can re-encode, so a late fetch would reach the worker.
+    const globals = globalThis as Record<string, unknown>
+    const saved = { OffscreenCanvas: globals.OffscreenCanvas, createImageBitmap: globals.createImageBitmap }
+    globals.OffscreenCanvas = class {}
+    globals.createImageBitmap = async () => ({})
+    t.after(() => Object.assign(globals, saved))
+
+    const advisor = new TextureAdvisor()
+    const { gltf, document } = fixture()
+    let releaseFetch!: () => void
+    let fetchStarted!: () => void
+    const started = new Promise<void>((resolve) => (fetchStarted = resolve))
+    const parser = gltf.parser as unknown as {
+      getDependency: (type: string, index: number) => Promise<unknown>
+    }
+    const original = parser.getDependency
+    parser.getDependency = async (type, index) => {
+      if (type !== 'bufferView') return original(type, index)
+      fetchStarted()
+      await new Promise<void>((resolve) => (releaseFetch = resolve))
+      return new Uint8Array(1000)
+    }
+    advisor.setModel({ gltf, files: [], document })
+    advisor.start()
+    await started
+    advisor.dispose()
+    releaseFetch()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal((advisor as unknown as { client: unknown }).client, null)
+  })
 })

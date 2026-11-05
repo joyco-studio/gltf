@@ -125,6 +125,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   private model: AdvisoryModel | null = null
   private run: Disposer | null = null
   private client: AdvisoryClient | null = null
+  private disposed = false
   /** Unused-texel masks (PNG) of the current run, for the report. */
   private unusedMasks = new Map<number, Blob>()
 
@@ -179,6 +180,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   }
 
   dispose() {
+    this.disposed = true
     this.run?.dispose()
     this.run = null
     this.client?.dispose()
@@ -192,7 +194,9 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     this.emit('change', snapshot)
   }
 
-  private getClient() {
+  /** The worker client for a still-live run; never spawns one after cancellation. */
+  private getClient(run: Disposer) {
+    if (this.disposed || run.disposed) throw new Error('Advisory run cancelled')
     this.client ??= new AdvisoryClient()
     return this.client
   }
@@ -250,7 +254,8 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
         model,
         document.textures[group[0]],
         advice,
-        masks.get(group) ?? null
+        masks.get(group) ?? null,
+        run
       ).catch((): DownloadProjection => ({ status: 'unavailable' }))
       commit(group, { ...advice, download })
     }
@@ -301,7 +306,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     }
 
     const { width, height, scale } = maskSize(texture)
-    const result = await this.getClient().coverage({
+    const result = await this.getClient(run).coverage({
       width,
       height,
       padding: Math.max(1, Math.ceil(PADDING_TEXELS * scale)),
@@ -346,9 +351,12 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     { gltf, files }: AdvisoryModel,
     texture: GltfTextureInfo,
     advice: Extract<TextureAdvice, { status: 'unused' | 'analyzed' }>,
-    mask: Mask | null
+    mask: Mask | null,
+    run: Disposer
   ): Promise<DownloadProjection> {
     const blob = await getTextureBlob(texture, gltf, files)
+    // The fetch may outlive the run (model replaced, viewer closed).
+    if (run.disposed) return { status: 'unavailable' }
     const original = blob.size
     if (advice.status === 'unused') {
       return { status: 'measured', original, cleared: null, cropped: null }
@@ -363,7 +371,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     const cropArea = advice.crop ? advice.crop.width * advice.crop.height : area
     if (canReencode(mimeType)) {
       try {
-        const measured = await this.getClient().download({
+        const measured = await this.getClient(run).download({
           blob,
           mimeType,
           mask: mask.mask,
