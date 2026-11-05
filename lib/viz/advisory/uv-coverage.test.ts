@@ -237,11 +237,30 @@ describe('computeCoverage', () => {
 })
 
 describe('textureTransformMatrix', () => {
-  it('rotates per the KHR_texture_transform spec', () => {
+  it('rotates per the KHR_texture_transform spec (column-major GLSL mat3)', () => {
     const [a, b, , d, e] = textureTransformMatrix({ rotation: Math.PI / 2 })
-    // u' = v, v' = -u
-    assert.ok(Math.abs(a) < 1e-9 && Math.abs(b - 1) < 1e-9)
-    assert.ok(Math.abs(d + 1) < 1e-9 && Math.abs(e) < 1e-9)
+    // u' = −v, v' = u
+    assert.ok(Math.abs(a) < 1e-9 && Math.abs(b + 1) < 1e-9)
+    assert.ok(Math.abs(d - 1) < 1e-9 && Math.abs(e) < 1e-9)
+  })
+
+  it('composes translation · rotation · scale like the spec shader', () => {
+    const r = 0.3
+    const [a, b, c, d, e, f] = textureTransformMatrix({
+      offset: [0.2, 0.1],
+      rotation: r,
+      scale: [2, 3],
+    })
+    const [u, v] = [0.4, 0.7]
+    // matrix * vec3(uv, 1), with the spec's column-major rotation
+    const su = 2 * u
+    const sv = 3 * v
+    const expected = [
+      Math.cos(r) * su - Math.sin(r) * sv + 0.2,
+      Math.sin(r) * su + Math.cos(r) * sv + 0.1,
+    ]
+    assert.ok(Math.abs(a * u + b * v + c - expected[0]) < 1e-12)
+    assert.ok(Math.abs(d * u + e * v + f - expected[1]) < 1e-12)
   })
 })
 

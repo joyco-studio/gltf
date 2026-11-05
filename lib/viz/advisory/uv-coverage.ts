@@ -88,7 +88,11 @@ type TriangleVisitor = (
   y2: number
 ) => void
 
-/** KHR_texture_transform → affine matrix (translation · rotation · scale). */
+/**
+ * KHR_texture_transform → affine matrix (translation · rotation · scale).
+ * The spec's GLSL builds `rotation` with the column-major `mat3(...)`
+ * constructor, so its rows are [cos, −sin] and [sin, cos].
+ */
 function textureTransformMatrix(transform: {
   offset?: readonly number[]
   rotation?: number
@@ -99,7 +103,7 @@ function textureTransformMatrix(transform: {
   const rotation = transform.rotation ?? 0
   const cos = Math.cos(rotation)
   const sin = Math.sin(rotation)
-  return [cos * sx, sin * sy, ox, -sin * sx, cos * sy, oy]
+  return [cos * sx, -sin * sy, ox, sin * sx, cos * sy, oy]
 }
 
 function tileRange(min: number, max: number, wrap: number) {

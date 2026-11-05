@@ -44,7 +44,7 @@ describe('resolveTextureBindings', () => {
 
   it('lets KHR_texture_transform override the UV set and carries its matrix', () => {
     assert.deepEqual(occlusion.texCoords, [0])
-    assert.deepEqual(occlusion.layers[0].transform, [1, 0, 0.5, -0, 1, 0])
+    assert.deepEqual(occlusion.layers[0].transform, [1, -0, 0.5, 0, 1, 0])
     assert.equal(occlusion.wrapS, WRAP_REPEAT)
   })
 
