@@ -184,6 +184,7 @@ function viewerFixture(t: TestContext) {
     frameHandle: null,
     validationSchema: null,
     controls: { setIdle: () => {} },
+    advisory: { setModel: () => {} },
   })
   t.after(() => viewer.dispose())
   return { viewer, images, created, revoked }

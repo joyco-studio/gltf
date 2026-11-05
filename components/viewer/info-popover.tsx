@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Globe, History, Info } from "lucide-react";
+import { FlaskConical, Globe, History, Info } from "lucide-react";
 import { REVISION } from "three/webgpu";
 
 import { Logo } from "@/components/logo";
@@ -13,6 +13,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+
+import { FeatureFlagsDialog } from "./feature-flags-dialog";
 
 function XLogo({ className }: { className?: string }) {
   return (
@@ -63,72 +65,95 @@ function InfoLink({
 }
 
 function InfoPopover() {
+  const [open, setOpen] = React.useState(false);
+  const [flagsOpen, setFlagsOpen] = React.useState(false);
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="accent" size="icon-sm">
-          <Info />
-          <span className="sr-only">About</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-64 p-0">
-        <div className="flex flex-col gap-2 p-3">
-          <Logo className="h-5 self-start" />
-          <p className="font-mono text-xs">
-            glTF visualizer — made by JOYCO Studio
-          </p>
-        </div>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="accent" size="icon-sm">
+            <Info />
+            <span className="sr-only">About</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" sideOffset={8} className="w-64 p-0">
+          <div className="flex flex-col gap-2 p-3">
+            <Logo className="h-5 self-start" />
+            <p className="font-mono text-xs">
+              glTF visualizer — made by JOYCO Studio
+            </p>
+          </div>
 
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="font-mono text-xs uppercase tracking-wide">
-            Viewer
-          </span>
-          <Badge variant="muted" size="sm">
-            v{process.env.NEXT_PUBLIC_APP_VERSION}
-          </Badge>
-        </div>
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="font-mono text-xs uppercase tracking-wide">
+              Viewer
+            </span>
+            <Badge variant="muted" size="sm">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </Badge>
+          </div>
 
-        <Separator />
+          <Separator />
 
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="font-mono text-xs uppercase tracking-wide">
-            Engine
-          </span>
-          <Badge variant="muted" size="sm">
-            three.js r{REVISION} · WebGPU
-          </Badge>
-        </div>
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="font-mono text-xs uppercase tracking-wide">
+              Engine
+            </span>
+            <Badge variant="muted" size="sm">
+              three.js r{REVISION} · WebGPU
+            </Badge>
+          </div>
 
-        <Separator />
+          <Separator />
 
-        <div className="flex flex-col p-1">
-          <InfoLink
-            href="https://github.com/joyco-studio/gltf/blob/main/CHANGELOG.md"
-            icon={<History className="size-3.5" />}
-          >
-            Changelog
-          </InfoLink>
-          <InfoLink
-            href="https://joyco.studio"
-            icon={<Globe className="size-3.5" />}
-          >
-            joyco.studio
-          </InfoLink>
-          <InfoLink
-            href="https://x.com/joyco_studio"
-            icon={<XLogo className="size-3" />}
-          >
-            @joyco_studio
-          </InfoLink>
-          <InfoLink
-            href="https://github.com/joyco-studio/gltf"
-            icon={<GithubLogo className="size-3.5" />}
-          >
-            joyco-studio/gltf
-          </InfoLink>
-        </div>
-      </PopoverContent>
-    </Popover>
+          <div className="flex flex-col p-1">
+            <InfoLink
+              href="https://github.com/joyco-studio/gltf/blob/main/CHANGELOG.md"
+              icon={<History className="size-3.5" />}
+            >
+              Changelog
+            </InfoLink>
+            <InfoLink
+              href="https://joyco.studio"
+              icon={<Globe className="size-3.5" />}
+            >
+              joyco.studio
+            </InfoLink>
+            <InfoLink
+              href="https://x.com/joyco_studio"
+              icon={<XLogo className="size-3" />}
+            >
+              @joyco_studio
+            </InfoLink>
+            <InfoLink
+              href="https://github.com/joyco-studio/gltf"
+              icon={<GithubLogo className="size-3.5" />}
+            >
+              joyco-studio/gltf
+            </InfoLink>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setFlagsOpen(true);
+              }}
+              className="flex items-center gap-2 px-2 py-1.5 text-left font-mono text-xs transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <FlaskConical className="size-3.5" />
+              Feature flags
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {/* outside the popover so it survives the popover closing */}
+      <FeatureFlagsDialog open={flagsOpen} onOpenChange={setFlagsOpen} />
+    </>
   );
 }
 
