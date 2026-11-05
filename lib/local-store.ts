@@ -57,7 +57,8 @@ function createLocalStore<T>(
     subscribe(listener) {
       listeners.add(listener)
       const onStorage = (event: StorageEvent) => {
-        if (event.key === key) listener()
+        // a null key means another tab called localStorage.clear()
+        if (event.key === null || event.key === key) listener()
       }
       window.addEventListener('storage', onStorage)
       return () => {
