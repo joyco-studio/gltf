@@ -105,31 +105,24 @@ describe('CameraPreviewSystem', () => {
     )
   })
 
-  it('detaches on viewport presses, ignoring UI clicks', () => {
+  it('detaches only on presses over the viewport', () => {
     const canvas = new EventTarget()
-    const system = setup(new PerspectiveCamera(), { type: 'perspective' }, canvas)
+    const system = setup(
+      new PerspectiveCamera(),
+      { type: 'perspective' },
+      canvas
+    )
     system.start(0, 'Shot')
 
-    // a press on the UI (outside the canvas) keeps the preview
+    // UI presses, viewport wheel and key presses keep the preview
     window.dispatchEvent(new Event('pointerdown'))
+    canvas.dispatchEvent(new Event('wheel'))
+    window.dispatchEvent(new Event('keydown'))
     assert.notEqual(system.getSnapshot(), null)
 
     canvas.dispatchEvent(new Event('pointerdown'))
     assert.equal(system.getSnapshot(), null)
     assert.equal(system.camera, null)
-    system.dispose()
-  })
-
-  it('detaches on key presses after the triggering one', () => {
-    const system = setup(new PerspectiveCamera(), { type: 'perspective' })
-    const triggering = new Event('keydown')
-    system.start(0, 'Shot')
-
-    window.dispatchEvent(triggering)
-    assert.notEqual(system.getSnapshot(), null)
-
-    window.dispatchEvent(new Event('keydown'))
-    assert.equal(system.getSnapshot(), null)
     system.dispose()
   })
 })

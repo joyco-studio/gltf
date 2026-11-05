@@ -35,7 +35,7 @@ function CameraPreviewFrame() {
   )
 }
 
-/** Flags the camera being looked through; any input exits. */
+/** Flags the camera being looked through; a viewport click exits. */
 function CameraPreviewBanner() {
   const { viewer } = useViewer()
   const preview = useCameraPreview()
@@ -50,7 +50,7 @@ function CameraPreviewBanner() {
           <span className="max-w-56 truncate normal-case text-foreground">
             {preview.name}
           </span>
-          · click to exit
+          · click the scene to exit
         </p>
         <Button
           variant="accent"

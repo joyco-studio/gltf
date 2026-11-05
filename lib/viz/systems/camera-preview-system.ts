@@ -22,9 +22,6 @@ interface GltfCameraJson {
   cameras?: { type?: string; perspective?: { aspectRatio?: number } }[]
 }
 
-/** Viewport input that ends a preview — UI overlays never reach the canvas. */
-const CANVAS_DETACH_EVENTS = ['pointerdown', 'wheel'] as const
-
 /**
  * Looks through a glTF camera node. Rendering swaps to a proxy that copies
  * the source camera's world transform and projection every frame (so
@@ -32,8 +29,8 @@ const CANVAS_DETACH_EVENTS = ['pointerdown', 'wheel'] as const
  * Where the authored frame aspect differs from the viewport, the proxy
  * widens to contain the whole frame and the UI masks the overflow.
  *
- * Previews are transient: a press or wheel on the viewport, or any key press,
- * detaches back to the untouched viewer camera. Clicks on the UI are ignored.
+ * Previews are transient: a press on the viewport detaches back to the
+ * untouched viewer camera. UI clicks, wheel and keys leave it running.
  */
 class CameraPreviewSystem
   extends EventEmitter<{ change: PreviewSnapshot }>
@@ -47,7 +44,6 @@ class CameraPreviewSystem
   private source: PerspectiveCamera | OrthographicCamera | null = null
   private snapshot: PreviewSnapshot = null
   private viewportAspect = 1
-  private startedAt = 0
 
   constructor(canvas: HTMLCanvasElement) {
     super()
@@ -57,12 +53,11 @@ class CameraPreviewSystem
   init(viewer: Viewer) {
     this.viewer = viewer
     // Capture phase: detach before the canvas' own handlers (orbit drag,
-    // picking) see the input, so the gesture continues on the restored
-    // viewer camera.
-    for (const type of CANVAS_DETACH_EVENTS) {
-      this.disposer.listen(this.canvas, type, this.onInput, { capture: true })
-    }
-    this.disposer.listen(window, 'keydown', this.onInput, { capture: true })
+    // picking) see the press, so the gesture continues on the restored
+    // viewer camera. UI overlays never reach the canvas.
+    this.disposer.listen(this.canvas, 'pointerdown', () => this.stop(), {
+      capture: true,
+    })
     this.disposer.add(
       viewer.on('change', ({ status }) => {
         if (status === 'loading') this.stop()
@@ -93,9 +88,6 @@ class CameraPreviewSystem
     }
 
     this.source = source
-    // The triggering input (menu pointerup, Enter keydown) was created
-    // before now — ignore it so the preview doesn't end on arrival.
-    this.startedAt = performance.now()
     this.snapshot = { nodeId, name, aspect: this.authoredAspect(nodeId) }
     this.sync()
     this.emit('change', this.snapshot)
@@ -107,15 +99,6 @@ class CameraPreviewSystem
     this.source = null
     this.snapshot = null
     this.emit('change', null)
-  }
-
-  private onInput = (event: Event) => {
-    if (!this.source || event.timeStamp < this.startedAt) return
-    // ESC is consumed by the detach — don't also exit a running inspection
-    if ((event as KeyboardEvent).key === 'Escape') {
-      event.preventDefault()
-    }
-    this.stop()
   }
 
   private authoredAspect(nodeId: number): number | null {
