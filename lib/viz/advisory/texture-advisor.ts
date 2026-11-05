@@ -312,12 +312,9 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     }
 
     const { width, height, scale } = maskSize(texture)
-    const result = await this.getClient(run).coverage({
-      width,
-      height,
-      padding: Math.max(1, Math.ceil(PADDING_TEXELS * scale)),
-      layers,
-    })
+    // At least one mask cell, which on large images spans several texels.
+    const padding = Math.max(1, Math.ceil(PADDING_TEXELS * scale))
+    const result = await this.getClient(run).coverage({ width, height, padding, layers })
     // An inline job can't be interrupted and may finish after the model was
     // replaced; drop its results instead of mixing them into the new run.
     if (run.disposed) throw new Error('Advisory run cancelled')
@@ -345,6 +342,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
           : cropRect(result.bounds, texture.width, texture.height),
       tiling: result.tiling,
       offset: result.offset,
+      mask: { width, height, paddingTexels: Math.ceil(padding / scale) },
       sharedWith: [],
       texCoords: [...new Set(bindings.flatMap((binding) => binding.texCoords))].sort(),
       users: bindings.flatMap((binding) => binding.users),

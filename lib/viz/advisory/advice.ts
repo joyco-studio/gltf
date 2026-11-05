@@ -42,6 +42,8 @@ type TextureAdvice =
       tiling: boolean
       /** Islands sit in a repeat tile other than 0–1, so cropping is withheld. */
       offset: boolean
+      /** Resolution of the coverage mask, and the gutter it keeps in image texels. */
+      mask: { width: number; height: number; paddingTexels: number }
       sharedWith: number[]
       texCoords: number[]
       users: TextureUser[]

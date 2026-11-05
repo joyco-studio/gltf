@@ -165,6 +165,7 @@ function buildAdvisoryReport({
         mesh: user.meshName,
         objects: objectsByMesh.get(user.meshId) ?? [],
       })),
+      mask: analyzed?.mask ?? null,
       unusedMaskPng: unusedMasks?.get(texture.id) ?? null,
     }
   })
@@ -187,9 +188,9 @@ function buildAdvisoryReport({
     source: fileName,
     generatedAt: generatedAt.toISOString(),
     threshold: threshold / 100,
-    paddingTexels: 4,
     conventions: {
-      usage: 'Share of texels covered by UV triangles (plus a 4-texel mip gutter), 0–1.',
+      usage: 'Share of texels covered by UV triangles plus a mip gutter of `mask.paddingTexels` image texels, 0–1.',
+      mask: '`width`×`height` is the resolution of `unusedMaskPng` (in mask cells); `paddingTexels` is the gutter kept around islands, in image texels.',
       pixelsTopLeft: 'Image pixels, origin top-left (glTF / PNG row order).',
       pixelsBottomLeft: 'Image pixels, origin bottom-left (Blender image.pixels row order).',
       uvGltf: 'glTF UVs: origin top-left, v grows down.',
@@ -218,9 +219,9 @@ function buildAdvisoryReport({
     '- **Coordinate spaces.** glTF and PNG use a top-left origin; Blender uses bottom-left. Every rect in the JSON comes in both (`pixelsTopLeft`/`pixelsBottomLeft`, `uvGltf`/`uvBlender`). Use the Blender variants inside Blender.',
     '- **Finding things.** Images, materials and meshes keep their glTF names on import. Objects are named after glTF nodes (`objects`). Embedded images may show up as packed images.',
     '- **`remove`.** No texture that reads this image is sampled by any mesh. The importer usually skips such images and re-exporting drops them; if it is in `bpy.data.images` with no users, delete it. Never delete an image whose `sharesImageWith` textures appear elsewhere with other actions.',
-    '- **`bleed`.** Fill every texel the UV islands never sample by bleeding the surrounding island colors outward (edge padding / dilation, e.g. a push-pull fill), keeping the resolution. **Never use a solid color such as black:** mip levels average neighboring texels, so a flat fill darkens island edges when the model is seen from a distance. This only shrinks the compressed file. `unusedMaskPng` marks those texels on the full, uncropped image (flip it vertically for Blender). You can also recompute the mask by rasterizing the listed objects\' faces in that UV map, plus a 4-texel margin.',
+    '- **`bleed`.** Fill every texel the UV islands never sample by bleeding the surrounding island colors outward (edge padding / dilation, e.g. a push-pull fill), keeping the resolution. **Never use a solid color such as black:** mip levels average neighboring texels, so a flat fill darkens island edges when the model is seen from a distance. This only shrinks the compressed file. `unusedMaskPng` marks those texels on the full, uncropped image (flip it vertically for Blender). Scale it up to the image (nearest neighbour). You can also recompute it by rasterizing the listed objects\' faces in that UV map, keeping a margin of `mask.paddingTexels` texels; never use a smaller margin.',
     '- **`crop`.** After bleeding, crop the image to `crop.pixelsBottomLeft` and save it in the same format. Then remap sampling so the meshes still line up. **Prefer a Mapping node** (type Point, values in `crop.mappingNode`) between the UV source and this Image Texture node, in every material listed in `usedBy`. The glTF exporter writes it out as `KHR_texture_transform`. Only edit mesh UVs directly (`crop.uvRemap`) when every texture sampled through that UV map gets exactly the same crop, because editing UVs moves all of them.',
-    '- **`repack`.** The unused space sits between islands, so cropping cannot reclaim it. Pack the islands (UV › Pack Islands, margin ≥ 4 px at this resolution) and re-bake every texture in the set from the old layout. Do this only if baking is available; otherwise do `bleed` alone.',
+    '- **`repack`.** The unused space sits between islands, so cropping cannot reclaim it. Pack the islands (UV › Pack Islands, margin of at least `mask.paddingTexels` px) and re-bake every texture in the set from the old layout. Do this only if baking is available; otherwise do `bleed` alone.',
     '- **Shared images.** Several glTF textures can read one image (`sharesImageWith`). Coverage and actions already account for all of them, and each image is listed once below; edit the image once and update every material that samples it.',
     '- **Caution.** Textures marked `tiling` repeat by design: never crop them. `uvOffset` means some islands sit in a repeat tile outside 0–1, so no crop is given; move those islands into 0–1 first if you want to crop. If `textureTransform` is true, the material already has a Mapping node, so compose your offset/scale with it instead of replacing it.',
     '',
@@ -240,6 +241,11 @@ function buildAdvisoryReport({
     if (entry.bytes) {
       lines.push(
         `- Download: ${formatBytes(entry.bytes.original)} → save ${formatBytes(entry.bytes.savings ?? 0)}${entry.bytes.method === 'estimated' ? ' (estimate)' : ''}`
+      )
+    }
+    if (entry.mask) {
+      lines.push(
+        `- Mask: ${entry.mask.width}×${entry.mask.height} cells; keeps a ${entry.mask.paddingTexels}-texel margin around islands`
       )
     }
     if (entry.crop) {

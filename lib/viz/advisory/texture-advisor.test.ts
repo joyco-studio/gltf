@@ -18,7 +18,7 @@ function islandMesh(u0: number, v0: number, u1: number, v1: number) {
   return new Mesh(geometry)
 }
 
-function texture(id: number): GltfTextureInfo {
+function texture(id: number, size = 100): GltfTextureInfo {
   return {
     kind: 'texture',
     id,
@@ -28,8 +28,8 @@ function texture(id: number): GltfTextureInfo {
     slots: [],
     instances: 1,
     mimeType: 'image/png',
-    width: 100,
-    height: 100,
+    width: size,
+    height: size,
     size: null,
     gpuSize: null,
     previewUrl: null,
@@ -65,7 +65,7 @@ function fixture() {
   const document = {
     fileName: 'scene.glb',
     nodes: [],
-    textures: [texture(0), texture(1), texture(2)],
+    textures: [texture(0), texture(1), texture(2, 4096)],
   } as unknown as GltfDocumentInfo
   return { gltf, document }
 }
@@ -95,6 +95,7 @@ describe('TextureAdvisor', () => {
     assert.ok(first.coverage > 0.5)
     assert.equal(first.coverage, second.coverage)
     assert.deepEqual(first.sharedWith, [1])
+    assert.equal(first.mask.paddingTexels, 4)
     assert.deepEqual(second.sharedWith, [0])
     assert.deepEqual(
       first.users.map((user) => user.materialName),
@@ -113,6 +114,8 @@ describe('TextureAdvisor', () => {
     assert.equal(offset.status, 'analyzed')
     if (offset.status !== 'analyzed') return
     assert.equal(offset.offset, true)
+    // a 4096² image is analyzed at 512², so the minimum one-cell gutter is 8 texels
+    assert.deepEqual(offset.mask, { width: 512, height: 512, paddingTexels: 8 })
     assert.ok(offset.coverage < 0.25)
     assert.equal(offset.crop, null)
     advisor.dispose()

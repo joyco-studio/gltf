@@ -46,6 +46,7 @@ const advice: TextureAdvice[] = [
     crop: { x: 100, y: 50, width: 500, height: 250 },
     tiling: false,
     offset: false,
+    mask: { width: 512, height: 256, paddingTexels: 8 },
     sharedWith: [],
     texCoords: [0],
     users: [{ materialId: 0, materialName: 'Skin', meshId: 0, meshName: 'BodyMesh', slot: 'baseColorTexture', texCoord: 0 }],
@@ -106,5 +107,6 @@ describe('buildAdvisoryReport', () => {
       { material: 'Skin', slot: 'baseColorTexture', uvMapIndex: 0, mesh: 'BodyMesh', objects: ['Hero'] },
     ])
     assert.equal(skin.unusedMaskPng, 'AAAA')
+    assert.deepEqual(skin.mask, { width: 512, height: 256, paddingTexels: 8 })
   })
 })
