@@ -15,6 +15,10 @@ import {
   type SkeletonSnapshot,
 } from '@/lib/viz/systems/skeleton-system'
 import { EMPTY_VISIBILITY_SNAPSHOT } from '@/lib/viz/systems/visibility-system'
+import {
+  IDLE_ADVISORY,
+  type AdvisorySnapshot,
+} from '@/lib/viz/advisory/texture-advisor'
 
 import { useViewer } from './viewer-provider'
 
@@ -135,7 +139,28 @@ function useHiddenNodes(): ReadonlySet<number> {
   )
 }
 
+const getIdleAdvisory = () => IDLE_ADVISORY
+
+/** React's view into the TextureAdvisor's progressive analysis. */
+function useAdvisoryState(): AdvisorySnapshot {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.advisory.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.advisory.getSnapshot() : getIdleAdvisory,
+    getIdleAdvisory
+  )
+}
+
 export {
+  useAdvisoryState,
   useAnimationsState,
   useAxesVisible,
   useControlsState,

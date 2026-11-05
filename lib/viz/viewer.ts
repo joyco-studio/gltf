@@ -1,5 +1,6 @@
 import { Scene, Timer } from 'three/webgpu'
 
+import { TextureAdvisor } from './advisory/texture-advisor'
 import { ControlSystem } from './controls/control-system'
 import { Disposer } from './disposer'
 import { AnimationSystem } from './systems/animation-system'
@@ -69,6 +70,8 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly animations: AnimationSystem
   readonly skeleton: SkeletonSystem
   readonly visibility: VisibilitySystem
+  /** Texture-space usage analysis, started lazily by the UV Coverage tab. */
+  readonly advisory = new TextureAdvisor()
 
   private systems: System[]
   private disposer = new Disposer()
@@ -137,6 +140,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.disposer.add(() => this.resizeObserver.disconnect())
     this.timer.connect(document)
     this.disposer.add(this.timer)
+    this.disposer.add(this.advisory)
   }
 
   getSnapshot(): ViewerSnapshot {
@@ -248,6 +252,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.validationSource = source
       this.documentPreviews.dispose()
       this.documentPreviews = previews
+      this.advisory.setModel({ gltf: loaded.gltf, files: loaded.files, document })
       this.setSnapshot({ status: 'ready', document, sourceUrl })
     } catch (error) {
       if (previews.disposed) return
