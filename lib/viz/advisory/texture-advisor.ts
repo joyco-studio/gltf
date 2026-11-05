@@ -209,6 +209,9 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
       status: 'pending',
     }))
     const masks = new Map<number[], Mask>()
+    // Owned by this run; the report reads it only while this run is current.
+    const unusedMasks = new Map<number, Blob>()
+    this.unusedMasks = unusedMasks
 
     const commit = (group: number[], advice: TextureAdvice) => {
       if (run.disposed) return
@@ -233,7 +236,8 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
           group.map((id) => bindings[id]).filter(Boolean),
           uvCache,
           run,
-          (mask) => masks.set(group, mask)
+          (mask) => masks.set(group, mask),
+          unusedMasks
         )
         commit(group, advice)
       } catch (error) {
@@ -271,7 +275,8 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     bindings: TextureBindings[],
     uvCache: Map<string, ReturnType<typeof readUvs>>,
     run: Disposer,
-    keepMask: (mask: Mask) => void
+    keepMask: (mask: Mask) => void,
+    unusedMasks: Map<number, Blob>
   ): Promise<TextureAdvice> {
     const pending: DownloadProjection = { status: 'pending' }
     if (!bindings.some((binding) => binding.referenced)) {
@@ -286,6 +291,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
         const key = `${ref.meshId}:${ref.primitiveIndex}:${ref.texCoord}`
         if (!uvCache.has(key)) {
           const mesh = (await gltf.parser.getDependency('mesh', ref.meshId)) as Object3D
+          if (run.disposed) throw new Error('Advisory run cancelled')
           const object = primitiveObject(mesh, ref.primitiveIndex) as
             | (Object3D & { geometry?: BufferGeometry })
             | null
@@ -312,10 +318,13 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
       padding: Math.max(1, Math.ceil(PADDING_TEXELS * scale)),
       layers,
     })
+    // An inline job can't be interrupted and may finish after the model was
+    // replaced; drop its results instead of mixing them into the new run.
+    if (run.disposed) throw new Error('Advisory run cancelled')
     keepMask({ mask: result.mask, width, height })
     if (result.unusedOverlay) {
       for (const binding of bindings) {
-        this.unusedMasks.set(binding.textureId, result.unusedOverlay)
+        unusedMasks.set(binding.textureId, result.unusedOverlay)
       }
     }
 

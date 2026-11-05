@@ -13,9 +13,9 @@ type DownloadProjection =
       /** `measured` re-encoded the image; `estimated` scaled by area. */
       status: 'measured' | 'estimated'
       original: number
-      /** Same resolution, unused texels flattened. */
+      /** Same resolution, unused texels filled by bleeding island colors. */
       cleared: number | null
-      /** Cropped to the used bounds (and flattened, when measured). */
+      /** Cropped to the used bounds (and bled, when measured). */
       cropped: number | null
     }
 

@@ -1,3 +1,4 @@
+import { bleedUnusedTexels } from './edge-bleed'
 import {
   computeCoverage,
   forEachFoldedTriangle,
@@ -126,9 +127,10 @@ async function encodedSize(canvas: OffscreenCanvas, mimeType: string) {
 
 /**
  * Measures how much smaller the image encodes once unused texels are
- * flattened (same resolution), and once it is also cropped to its used
- * bounds. Unused regions are painted flat black: nothing samples them, and
- * flat runs are what PNG/JPEG/WebP compress best.
+ * filled by bleeding the island colors outward (same resolution), and once
+ * it is also cropped to its used bounds. Bleeding rather than a solid color
+ * keeps the regenerated mip levels true to the islands; the smooth fill
+ * still compresses far better than leftover detail.
  */
 async function runDownloadJob({
   blob,
@@ -152,14 +154,9 @@ async function runDownloadJob({
     context.drawImage(bitmap, 0, 0)
     const full = await encodedSize(canvas, mimeType)
 
-    const unused = new OffscreenCanvas(maskWidth, maskHeight)
-    const unusedContext = unused.getContext('2d')
-    if (!unusedContext) throw new Error('No 2D context')
-    const unusedPixels = maskToImageData(mask, maskWidth, maskHeight, false)
-    // black, opaque where unused
-    unusedContext.putImageData(unusedPixels, 0, 0)
-    context.imageSmoothingEnabled = false
-    context.drawImage(unused, 0, 0, width, height)
+    const image = context.getImageData(0, 0, width, height)
+    bleedUnusedTexels(image.data, width, height, mask, maskWidth, maskHeight)
+    context.putImageData(image, 0, 0)
     const cleared = await encodedSize(canvas, mimeType)
 
     let croppedCleared: number | null = null

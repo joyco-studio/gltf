@@ -91,12 +91,12 @@ function hintFor(advice: TextureAdvice, flagged: boolean) {
   }
   if (!flagged) return null
   if (advice.offset) {
-    return 'Some islands sit outside the 0–1 tile (they repeat back onto the texture), so no crop is offered. Move them into 0–1 to make cropping possible, or paint the unused area one solid color.'
+    return 'Some islands sit outside the 0–1 tile (they repeat back onto the texture), so no crop is offered. Move them into 0–1 to make cropping possible, or fill the unused area by extending the island edge colors outward.'
   }
   if (advice.crop) {
     return `Crop to ${advice.crop.width}×${advice.crop.height} and remap with KHR_texture_transform (offset/scale), or repack the islands to fill the space.`
   }
-  return 'The unused space sits between UV islands, so cropping can’t remove it. Repack the UVs to use it, or paint it one solid color: nothing samples it, and solid areas compress to almost nothing in PNG/JPEG.'
+  return 'The unused space sits between UV islands, so cropping can’t remove it. Repack the UVs to use it, or fill it by extending the island edge colors outward: nothing samples it, the smooth fill compresses to almost nothing, and distant mip levels keep their colors.'
 }
 
 function DownloadLine({ download }: { download: DownloadProjection }) {
@@ -449,7 +449,7 @@ function AdvisoryRow({
               <InfoRow label="Original" value={formatBytes(download.original)} />
               {download.cleared !== null && download.cleared < download.original ? (
                 <InfoRow
-                  label="Unused filled solid"
+                  label="Unused filled (edge bleed)"
                   value={formatBytes(download.cleared)}
                 />
               ) : null}

@@ -12,7 +12,7 @@ import { resolveTextureBindings } from './texture-bindings'
 
 const REPORT_SCHEMA = 'gltf-texture-advisory/v1'
 
-type ReportAction = 'remove' | 'crop' | 'flatten' | 'repack'
+type ReportAction = 'remove' | 'crop' | 'bleed' | 'repack'
 
 interface ReportJson {
   images?: { name?: string; uri?: string; mimeType?: string; bufferView?: number }[]
@@ -83,8 +83,8 @@ function cropSpaces(crop: TexelRect, width: number, height: number) {
 function actionsFor(advice: TextureAdvice, flagged: boolean): ReportAction[] {
   if (advice.status === 'unused') return ['remove']
   if (advice.status !== 'analyzed' || !flagged) return []
-  // Order matters: the unused mask covers the full image, so flatten first.
-  return advice.crop ? ['flatten', 'crop'] : ['flatten', 'repack']
+  // Order matters: the unused mask covers the full image, so bleed first.
+  return advice.crop ? ['bleed', 'crop'] : ['bleed', 'repack']
 }
 
 function buildAdvisoryReport({
@@ -152,8 +152,8 @@ function buildAdvisoryReport({
       bytes: sizes
         ? {
             original: sizes.original,
-            flattened: sizes.cleared,
-            croppedAndFlattened: sizes.cropped,
+            bled: sizes.cleared,
+            croppedAndBled: sizes.cropped,
             method: sizes.status,
             savings: projectedSavings(advice),
           }
@@ -214,13 +214,13 @@ function buildAdvisoryReport({
     '',
     `You are working on the Blender scene imported from \`${fileName}\`. Apply the actions below, then re-export with the glTF exporter. Do not change anything that is not listed.`,
     '',
-    '- **Order.** Apply each texture\'s `actions` in the order listed. `flatten` always comes before `crop`, because `unusedMaskPng` and every rect describe the original, uncropped image.',
+    '- **Order.** Apply each texture\'s `actions` in the order listed. `bleed` always comes before `crop`, because `unusedMaskPng` and every rect describe the original, uncropped image.',
     '- **Coordinate spaces.** glTF and PNG use a top-left origin; Blender uses bottom-left. Every rect in the JSON comes in both (`pixelsTopLeft`/`pixelsBottomLeft`, `uvGltf`/`uvBlender`). Use the Blender variants inside Blender.',
     '- **Finding things.** Images, materials and meshes keep their glTF names on import. Objects are named after glTF nodes (`objects`). Embedded images may show up as packed images.',
     '- **`remove`.** No texture that reads this image is sampled by any mesh. The importer usually skips such images and re-exporting drops them; if it is in `bpy.data.images` with no users, delete it. Never delete an image whose `sharesImageWith` textures appear elsewhere with other actions.',
-    '- **`flatten`.** Fill every texel that the UV islands never sample with one flat color (opaque black, or the island edge color), keeping the resolution. This only shrinks the compressed file. `unusedMaskPng` marks those texels on the full, uncropped image (flip it vertically for Blender). You can also recompute the mask by rasterizing the listed objects\' faces in that UV map, plus a 4-texel margin.',
-    '- **`crop`.** After flattening, crop the image to `crop.pixelsBottomLeft` and save it in the same format. Then remap sampling so the meshes still line up. **Prefer a Mapping node** (type Point, values in `crop.mappingNode`) between the UV source and this Image Texture node, in every material listed in `usedBy`. The glTF exporter writes it out as `KHR_texture_transform`. Only edit mesh UVs directly (`crop.uvRemap`) when every texture sampled through that UV map gets exactly the same crop, because editing UVs moves all of them.',
-    '- **`repack`.** The unused space sits between islands, so cropping cannot reclaim it. Pack the islands (UV › Pack Islands, margin ≥ 4 px at this resolution) and re-bake every texture in the set from the old layout. Do this only if baking is available; otherwise do `flatten` alone.',
+    '- **`bleed`.** Fill every texel the UV islands never sample by bleeding the surrounding island colors outward (edge padding / dilation, e.g. a push-pull fill), keeping the resolution. **Never use a solid color such as black:** mip levels average neighboring texels, so a flat fill darkens island edges when the model is seen from a distance. This only shrinks the compressed file. `unusedMaskPng` marks those texels on the full, uncropped image (flip it vertically for Blender). You can also recompute the mask by rasterizing the listed objects\' faces in that UV map, plus a 4-texel margin.',
+    '- **`crop`.** After bleeding, crop the image to `crop.pixelsBottomLeft` and save it in the same format. Then remap sampling so the meshes still line up. **Prefer a Mapping node** (type Point, values in `crop.mappingNode`) between the UV source and this Image Texture node, in every material listed in `usedBy`. The glTF exporter writes it out as `KHR_texture_transform`. Only edit mesh UVs directly (`crop.uvRemap`) when every texture sampled through that UV map gets exactly the same crop, because editing UVs moves all of them.',
+    '- **`repack`.** The unused space sits between islands, so cropping cannot reclaim it. Pack the islands (UV › Pack Islands, margin ≥ 4 px at this resolution) and re-bake every texture in the set from the old layout. Do this only if baking is available; otherwise do `bleed` alone.',
     '- **Shared images.** Several glTF textures can read one image (`sharesImageWith`). Coverage and actions already account for all of them, and each image is listed once below; edit the image once and update every material that samples it.',
     '- **Caution.** Textures marked `tiling` repeat by design: never crop them. `uvOffset` means some islands sit in a repeat tile outside 0–1, so no crop is given; move those islands into 0–1 first if you want to crop. If `textureTransform` is true, the material already has a Mapping node, so compose your offset/scale with it instead of replacing it.',
     '',
