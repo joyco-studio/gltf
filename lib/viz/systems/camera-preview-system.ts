@@ -17,6 +17,12 @@ interface CameraPreview {
 
 type PreviewSnapshot = CameraPreview | null
 
+/** Wheel zoom feel, matching OrbitControls' dolly (0.95 per 100px notch). */
+const ZOOM_BASE = 0.95
+const ZOOM_RANGE = [0.2, 50] as const
+/** Exponential approach rate toward the wheel target (1/s). */
+const ZOOM_DAMPING = 12
+
 interface GltfCameraJson {
   nodes?: { camera?: number }[]
   cameras?: { type?: string; perspective?: { aspectRatio?: number } }[]
@@ -29,8 +35,9 @@ interface GltfCameraJson {
  * Where the authored frame aspect differs from the viewport, the proxy
  * widens to contain the whole frame and the UI masks the overflow.
  *
- * Previews are transient: a press on the viewport detaches back to the
- * untouched viewer camera. UI clicks, wheel and keys leave it running.
+ * The wheel zooms the preview (lerped, on top of the authored zoom) instead
+ * of dollying the viewer camera. A press on the viewport detaches back to
+ * the untouched viewer camera; UI clicks and keys leave the preview running.
  */
 class CameraPreviewSystem
   extends EventEmitter<{ change: PreviewSnapshot }>
@@ -44,6 +51,9 @@ class CameraPreviewSystem
   private source: PerspectiveCamera | OrthographicCamera | null = null
   private snapshot: PreviewSnapshot = null
   private viewportAspect = 1
+  /** Wheel zoom multiplier: eased `zoom` chasing `zoomTarget`. */
+  private zoom = 1
+  private zoomTarget = 1
 
   constructor(canvas: HTMLCanvasElement) {
     super()
@@ -57,6 +67,10 @@ class CameraPreviewSystem
     // viewer camera. UI overlays never reach the canvas.
     this.disposer.listen(this.canvas, 'pointerdown', () => this.stop(), {
       capture: true,
+    })
+    this.disposer.listen(this.canvas, 'wheel', this.onWheel, {
+      capture: true,
+      passive: false,
     })
     this.disposer.add(
       viewer.on('change', ({ status }) => {
@@ -88,10 +102,32 @@ class CameraPreviewSystem
     }
 
     this.source = source
+    this.zoom = this.zoomTarget = 1
     this.snapshot = { nodeId, name, aspect: this.authoredAspect(nodeId) }
     this.sync()
     this.emit('change', this.snapshot)
     return true
+  }
+
+  /**
+   * Zoom the preview instead of the viewer camera: capture phase on the
+   * canvas runs before the orbit/fly wheel handlers, which never see it.
+   */
+  private onWheel = (event: WheelEvent) => {
+    if (!this.source) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+
+    // same delta normalization as OrbitControls
+    let delta = event.deltaY
+    if (event.deltaMode === 1) delta *= 16
+    else if (event.deltaMode === 2) delta *= 100
+    if (event.ctrlKey) delta *= 10 // trackpad pinch
+
+    this.zoomTarget = MathUtils.clamp(
+      this.zoomTarget * Math.pow(ZOOM_BASE, delta * 0.01),
+      ...ZOOM_RANGE
+    )
   }
 
   stop() {
@@ -131,7 +167,7 @@ class CameraPreviewSystem
     )
     camera.near = source.near
     camera.far = source.far
-    camera.zoom = source.zoom
+    camera.zoom = source.zoom * this.zoom
 
     const viewport = this.viewportAspect
     const frame = this.snapshot?.aspect ?? viewport
@@ -170,7 +206,13 @@ class CameraPreviewSystem
   }
 
   /** Runs after animations/skeleton so the pose matches this frame. */
-  update() {
+  update(dt: number) {
+    if (!this.source) return
+    // ease in log space so zooming in and out feel symmetric
+    const t = 1 - Math.exp(-ZOOM_DAMPING * dt)
+    this.zoom = Math.exp(
+      MathUtils.lerp(Math.log(this.zoom), Math.log(this.zoomTarget), t)
+    )
     this.sync()
   }
 

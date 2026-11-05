@@ -68,7 +68,7 @@ describe('CameraPreviewSystem', () => {
     assert.equal(source.aspect, 1)
 
     source.position.x = 10
-    system.update()
+    system.update(0)
     assert.equal(proxy.position.x, 11)
 
     assert.equal(system.start(1, 'Not a camera'), false)
@@ -123,6 +123,41 @@ describe('CameraPreviewSystem', () => {
     canvas.dispatchEvent(new Event('pointerdown'))
     assert.equal(system.getSnapshot(), null)
     assert.equal(system.camera, null)
+    system.dispose()
+  })
+
+  it('wheel zooms the preview with easing, hiding it from the controls', () => {
+    const canvas = new EventTarget()
+    const source = new PerspectiveCamera()
+    source.zoom = 2
+    const system = setup(source, { type: 'perspective' }, canvas)
+    let controlsSawWheel = false
+    canvas.addEventListener('wheel', () => (controlsSawWheel = true))
+
+    // not previewing → the wheel belongs to the viewer controls
+    canvas.dispatchEvent(Object.assign(new Event('wheel'), { deltaY: -100 }))
+    assert.equal(controlsSawWheel, true)
+
+    controlsSawWheel = false
+    system.start(0, 'Shot')
+    const wheel = Object.assign(new Event('wheel', { cancelable: true }), {
+      deltaY: -100,
+      deltaMode: 0,
+    })
+    canvas.dispatchEvent(wheel)
+    assert.equal(controlsSawWheel, false)
+    assert.equal(wheel.defaultPrevented, true)
+
+    const proxy = system.camera as PerspectiveCamera
+    system.update(1 / 60)
+    // eased: partway toward the 1/0.95 target, on top of the authored zoom
+    assert.ok(proxy.zoom > 2 && proxy.zoom < 2 / 0.95)
+    system.update(10)
+    assert.ok(Math.abs(proxy.zoom - 2 / 0.95) < 1e-9)
+
+    // a fresh preview starts back at the authored zoom
+    system.start(0, 'Shot')
+    assert.equal(proxy.zoom, 2)
     system.dispose()
   })
 })
