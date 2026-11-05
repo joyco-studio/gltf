@@ -2,6 +2,7 @@ import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import type { Texture } from 'three/webgpu'
 import { canvasToBlob } from './canvas-to-blob'
 
+import { collectTextureRefs, type TextureRef } from './advisory/texture-bindings'
 import { validateGltf, type GltfValidationResult } from './validate'
 
 /**
@@ -209,30 +210,6 @@ function accessorByteLength(accessor: GltfJsonAccessor) {
   return accessor.count * componentBytes * componentCount
 }
 
-/**
- * Recursively walks a material definition collecting `{ index }` texture
- * references, keyed by their slot name (baseColorTexture, normalTexture,
- * clearcoatTexture, ...). Covers core PBR slots and extension slots alike.
- */
-function collectTextureSlots(
-  value: unknown,
-  slots: { slot: string; textureId: number }[],
-  key = ''
-) {
-  if (typeof value !== 'object' || value === null) return
-
-  const record = value as Record<string, unknown>
-
-  if (/texture$/i.test(key) && typeof record.index === 'number') {
-    slots.push({ slot: key, textureId: record.index })
-    return
-  }
-
-  for (const [childKey, childValue] of Object.entries(record)) {
-    collectTextureSlots(childValue, slots, childKey)
-  }
-}
-
 function buildMeshInfos(json: GltfJson, materialNames: string[]) {
   const accessors = json.accessors ?? []
   const nodes = json.nodes ?? []
@@ -393,8 +370,8 @@ function classifyNode(
 
 function buildMaterialInfos(json: GltfJson, meshes: GltfMeshInfo[]) {
   return (json.materials ?? []).map((material, id): GltfMaterialInfo => {
-    const slots: { slot: string; textureId: number }[] = []
-    collectTextureSlots(material, slots)
+    const slots: TextureRef[] = []
+    collectTextureRefs(material, slots)
 
     // A material instance = a mesh primitive using it, counted once per
     // node instance of that mesh (matches gltf.report semantics).
@@ -477,8 +454,8 @@ async function buildTextureInfos(
   const slotsByTexture = new Map<number, Set<string>>()
   const instancesByTexture = new Map<number, number>()
   ;(json.materials ?? []).forEach((material, materialId) => {
-    const slots: { slot: string; textureId: number }[] = []
-    collectTextureSlots(material, slots)
+    const slots: TextureRef[] = []
+    collectTextureRefs(material, slots)
     const materialInstances = materials[materialId]?.instances ?? 1
     for (const { slot, textureId } of slots) {
       if (!slotsByTexture.has(textureId)) {

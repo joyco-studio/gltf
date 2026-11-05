@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import { AdvisoryPanel, useFlaggedCount } from "./advisory-panel";
 import { AnimationsTable } from "./animations-table";
+import { useFeatureFlag } from "./feature-flags";
 import { HierarchyTable } from "./hierarchy-table";
 import { MaterialsTable } from "./materials-table";
 import { TexturesGrid } from "./textures-grid";
@@ -63,6 +65,12 @@ function InspectorPanel() {
     sidebarOpen: open,
     setSidebarOpen: setOpen,
   } = useViewer();
+  const uvCoverageEnabled = useFeatureFlag("uv-coverage");
+  const flaggedCount = useFlaggedCount();
+  // A shared ?tab=uv-coverage link falls back to the default tab when the
+  // feature is off for this visitor.
+  const activeTab =
+    tab === "uv-coverage" && !uvCoverageEnabled ? "contents" : tab;
   const [width, setWidth] = React.useState(DEFAULT_PANEL_WIDTH);
   const [resizing, setResizing] = React.useState(false);
   const { document } = snapshot;
@@ -154,7 +162,7 @@ function InspectorPanel() {
       style={{ width }}
     >
       <Tabs
-        value={tab}
+        value={activeTab}
         onValueChange={(value) => setTab(value as InspectorTab)}
         className="flex min-h-0 flex-1 flex-col"
       >
@@ -189,6 +197,19 @@ function InspectorPanel() {
                     {document.validationIssues.length}
                   </Badge>
                 </TabsTrigger>
+                {uvCoverageEnabled ? (
+                  <TabsTrigger value="uv-coverage" className="h-8">
+                    UV Coverage
+                    {flaggedCount !== null ? (
+                      <Badge
+                        variant={flaggedCount > 0 ? "destructive" : "muted"}
+                        size="sm"
+                      >
+                        {flaggedCount}
+                      </Badge>
+                    ) : null}
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
             </ScrollAreaContent>
           </ScrollAreaViewport>
@@ -239,6 +260,14 @@ function InspectorPanel() {
             <ValidationList issues={document.validationIssues} />
           </ScrollArea>
         </TabsContent>
+
+        {uvCoverageEnabled ? (
+          <TabsContent value="uv-coverage" className="min-h-0">
+            <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
+              <AdvisoryPanel textures={document.textures} />
+            </ScrollArea>
+          </TabsContent>
+        ) : null}
       </Tabs>
 
       {/* resize handle on the floating right edge */}
