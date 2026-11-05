@@ -11,6 +11,7 @@ import { ElementInfoPanel } from "./element-info-panel";
 import { EXAMPLE_MODEL } from "./example-model";
 import { FileDropZone, parseHttpUrl } from "./file-drop-zone";
 import { resolveSharePath } from "./share-path";
+import { CameraPreviewBanner, CameraPreviewFrame } from "./camera-preview";
 import { InspectBanner } from "./inspect-banner";
 import { InspectorPanel } from "./inspector-panel";
 import { SearchCommand } from "./search-command";
@@ -146,6 +147,7 @@ function ViewerApp() {
     <ViewerProvider>
       <div className="relative h-dvh overflow-hidden">
         <ViewerCanvas className="absolute inset-0" />
+        <CameraPreviewFrame />
         <ViewerHeader />
         {/* pointer-events pass through to the canvas; interactive overlays opt back in.
             top-16 = header bottom (top-4 + h-8 cluster) + the same 16px gap */}
@@ -156,6 +158,7 @@ function ViewerApp() {
             <ElementInfoPanel />
             <ControlsToolbar />
             <InspectBanner />
+            <CameraPreviewBanner />
             <ModelCredit />
             <ErrorBanner />
           </div>

@@ -25,6 +25,8 @@ describe('CameraHelperSystem', () => {
       },
     } as unknown as NonNullable<ModelSystem['current']>
 
+    let publishPreview: (previewing: boolean) => void = () =>
+      assert.fail('CameraHelperSystem did not subscribe to preview changes')
     let publishInspection: (target: InspectTarget | null) => void = () =>
       assert.fail('CameraHelperSystem did not subscribe to control changes')
     const scene = new Scene()
@@ -38,6 +40,13 @@ describe('CameraHelperSystem', () => {
           listener: (snapshot: { inspecting: InspectTarget | null }) => void
         ) => {
           publishInspection = (inspecting) => listener({ inspecting })
+          return () => undefined
+        },
+      },
+      cameraPreview: {
+        on: (_event: 'change', listener: (preview: unknown) => void) => {
+          publishPreview = (previewing) =>
+            listener(previewing ? { nodeId: 4 } : null)
           return () => undefined
         },
       },
@@ -59,6 +68,11 @@ describe('CameraHelperSystem', () => {
     publishInspection({ kind: 'node', id: 4, name: 'Camera' })
 
     assert.equal(scene.getObjectByName(HELPER_NAME), helper)
+    assert.equal(helper.visible, true)
+
+    publishPreview(true)
+    assert.equal(helper.visible, false)
+    publishPreview(false)
     assert.equal(helper.visible, true)
 
     system.dispose()

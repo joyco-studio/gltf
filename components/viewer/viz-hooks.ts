@@ -14,6 +14,7 @@ import {
   EMPTY_SKELETON_SNAPSHOT,
   type SkeletonSnapshot,
 } from '@/lib/viz/systems/skeleton-system'
+import type { CameraPreview } from '@/lib/viz/systems/camera-preview-system'
 import { EMPTY_VISIBILITY_SNAPSHOT } from '@/lib/viz/systems/visibility-system'
 
 import { useViewer } from './viewer-provider'
@@ -135,8 +136,29 @@ function useHiddenNodes(): ReadonlySet<number> {
   )
 }
 
+const getNoPreview = () => null
+
+/** React's view into the camera the viewport is looking through, if any. */
+function useCameraPreview(): CameraPreview | null {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.cameraPreview.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.cameraPreview.getSnapshot() : getNoPreview,
+    getNoPreview
+  )
+}
+
 export {
   useAnimationsState,
+  useCameraPreview,
   useAxesVisible,
   useControlsState,
   useGridVisible,

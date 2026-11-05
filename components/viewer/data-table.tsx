@@ -86,6 +86,7 @@ function DataTable<Row>({
   inspectRow,
   tree,
   visibility,
+  rowActions,
 }: {
   data: Row[];
   columns: ColumnDef<Row>[];
@@ -103,6 +104,8 @@ function DataTable<Row>({
   /** Render as a collapsible hierarchy instead of a flat list. */
   tree?: TreeConfig<Row>;
   visibility?: VisibilityConfig<Row>;
+  /** Extra right-click menu items for a row (requires `inspectRow`). */
+  rowActions?: (row: Row) => React.ReactNode;
 }) {
   const [sort, setSort] = React.useState<SortState | null>(null);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(
@@ -331,12 +334,15 @@ function DataTable<Row>({
               key={id}
               {...inspect}
               actions={
-                visibility && (
-                  <ContextMenuItem onSelect={() => visibility.toggle(row)}>
-                    {visibilityState === "hidden" ? <Eye /> : <EyeOff />}
-                    {visibilityState === "hidden" ? "Show" : "Hide"}
-                  </ContextMenuItem>
-                )
+                <>
+                  {rowActions?.(row)}
+                  {visibility && (
+                    <ContextMenuItem onSelect={() => visibility.toggle(row)}>
+                      {visibilityState === "hidden" ? <Eye /> : <EyeOff />}
+                      {visibilityState === "hidden" ? "Show" : "Hide"}
+                    </ContextMenuItem>
+                  )}
+                </>
               }
             >
               {tableRow}

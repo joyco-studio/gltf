@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { Video } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { formatBytes, formatNumber } from "@/lib/format";
 import type { GltfMeshInfo, GltfNodeInfo } from "@/lib/viz/inspect";
 
@@ -170,6 +172,16 @@ function HierarchyTable({
         selection: { kind: "node", id: node.id },
         name: node.name,
       })}
+      rowActions={(node) =>
+        node.objectType === "camera" && snapshot.status !== "loading" ? (
+          <ContextMenuItem
+            onSelect={() => viewer?.cameraPreview.start(node.id, node.name)}
+          >
+            <Video />
+            Preview camera
+          </ContextMenuItem>
+        ) : null
+      }
       // While a replacement model loads, these rows still describe the old
       // document but node ids already resolve against the new model.
       visibility={

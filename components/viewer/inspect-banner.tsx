@@ -8,7 +8,7 @@ import { Cluster } from '@/components/ui/cluster'
 import { Kbd } from '@/components/ui/kbd'
 
 import { useViewer } from './viewer-provider'
-import { useControlsState } from './viz-hooks'
+import { useCameraPreview, useControlsState } from './viz-hooks'
 
 /**
  * Flags the active inspection (entered via ⌘K) and owns its ESC exit.
@@ -18,6 +18,8 @@ function InspectBanner() {
   const { viewer } = useViewer()
   const controls = useControlsState()
   const inspecting = controls.inspecting
+  // the camera preview banner takes this slot while it's up
+  const previewing = useCameraPreview() !== null
 
   React.useEffect(() => {
     if (!viewer || !inspecting) return
@@ -32,7 +34,7 @@ function InspectBanner() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [viewer, inspecting])
 
-  if (!viewer || !inspecting) return null
+  if (!viewer || !inspecting || previewing) return null
 
   return (
     <div className="pointer-events-auto absolute top-0 left-1/2 z-30 -translate-x-1/2">

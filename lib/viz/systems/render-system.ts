@@ -58,7 +58,10 @@ class RenderSystem implements System {
 
   update() {
     if (!this.ready) return
-    this.renderer.render(this.viewer.scene, this.viewer.camera.camera)
+    this.renderer.render(
+      this.viewer.scene,
+      this.viewer.cameraPreview.camera ?? this.viewer.camera.camera
+    )
   }
 
   dispose() {
