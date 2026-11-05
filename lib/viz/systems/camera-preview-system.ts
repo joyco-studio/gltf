@@ -22,8 +22,8 @@ interface GltfCameraJson {
   cameras?: { type?: string; perspective?: { aspectRatio?: number } }[]
 }
 
-/** Input that ends a preview: any press, scroll on the viewport, or key. */
-const DETACH_EVENTS = ['pointerdown', 'keydown'] as const
+/** Viewport input that ends a preview — UI overlays never reach the canvas. */
+const CANVAS_DETACH_EVENTS = ['pointerdown', 'wheel'] as const
 
 /**
  * Looks through a glTF camera node. Rendering swaps to a proxy that copies
@@ -32,8 +32,8 @@ const DETACH_EVENTS = ['pointerdown', 'keydown'] as const
  * Where the authored frame aspect differs from the viewport, the proxy
  * widens to contain the whole frame and the UI masks the overflow.
  *
- * Previews are transient: any pointer press, viewport wheel or key press
- * detaches back to the untouched viewer camera.
+ * Previews are transient: a press or wheel on the viewport, or any key press,
+ * detaches back to the untouched viewer camera. Clicks on the UI are ignored.
  */
 class CameraPreviewSystem
   extends EventEmitter<{ change: PreviewSnapshot }>
@@ -56,13 +56,13 @@ class CameraPreviewSystem
 
   init(viewer: Viewer) {
     this.viewer = viewer
-    // Capture phase on window: detach before any other handler (orbit drag,
-    // UI clicks) sees the input, so the gesture continues on the restored
+    // Capture phase: detach before the canvas' own handlers (orbit drag,
+    // picking) see the input, so the gesture continues on the restored
     // viewer camera.
-    for (const type of DETACH_EVENTS) {
-      this.disposer.listen(window, type, this.onInput, { capture: true })
+    for (const type of CANVAS_DETACH_EVENTS) {
+      this.disposer.listen(this.canvas, type, this.onInput, { capture: true })
     }
-    this.disposer.listen(this.canvas, 'wheel', this.onInput, { capture: true })
+    this.disposer.listen(window, 'keydown', this.onInput, { capture: true })
     this.disposer.add(
       viewer.on('change', ({ status }) => {
         if (status === 'loading') this.stop()

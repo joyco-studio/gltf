@@ -15,15 +15,17 @@ import { CameraPreviewSystem } from './camera-preview-system'
 const globals = globalThis as { window?: EventTarget }
 globals.window ??= new EventTarget()
 
-function setup(camera: Camera, cameraJson: object) {
+function setup(
+  camera: Camera,
+  cameraJson: object,
+  canvas = new EventTarget()
+) {
   const root = new Group()
   root.position.set(1, 2, 3)
   root.add(camera)
   camera.position.set(0, 0, 5)
 
-  const system = new CameraPreviewSystem(
-    new EventTarget() as HTMLCanvasElement
-  )
+  const system = new CameraPreviewSystem(canvas as HTMLCanvasElement)
   system.init({
     on: () => () => undefined,
     model: {
@@ -103,7 +105,22 @@ describe('CameraPreviewSystem', () => {
     )
   })
 
-  it('detaches on input that arrives after the preview started', () => {
+  it('detaches on viewport presses, ignoring UI clicks', () => {
+    const canvas = new EventTarget()
+    const system = setup(new PerspectiveCamera(), { type: 'perspective' }, canvas)
+    system.start(0, 'Shot')
+
+    // a press on the UI (outside the canvas) keeps the preview
+    window.dispatchEvent(new Event('pointerdown'))
+    assert.notEqual(system.getSnapshot(), null)
+
+    canvas.dispatchEvent(new Event('pointerdown'))
+    assert.equal(system.getSnapshot(), null)
+    assert.equal(system.camera, null)
+    system.dispose()
+  })
+
+  it('detaches on key presses after the triggering one', () => {
     const system = setup(new PerspectiveCamera(), { type: 'perspective' })
     const triggering = new Event('keydown')
     system.start(0, 'Shot')
@@ -111,9 +128,8 @@ describe('CameraPreviewSystem', () => {
     window.dispatchEvent(triggering)
     assert.notEqual(system.getSnapshot(), null)
 
-    window.dispatchEvent(new Event('pointerdown'))
+    window.dispatchEvent(new Event('keydown'))
     assert.equal(system.getSnapshot(), null)
-    assert.equal(system.camera, null)
     system.dispose()
   })
 })
