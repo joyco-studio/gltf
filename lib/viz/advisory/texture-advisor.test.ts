@@ -47,7 +47,11 @@ function fixture() {
     meshes: [0, 1, 2].map((material) => ({ name: `mesh_${material}`, primitives: [{ material }] })),
     materials: [
       { name: 'A', pbrMetallicRoughness: { baseColorTexture: { index: 0 } } },
-      { name: 'B', emissiveTexture: { index: 1 } },
+      // an identity transform: no visual change, but the material has a Mapping node
+      {
+        name: 'B',
+        emissiveTexture: { index: 1, extensions: { KHR_texture_transform: { offset: [0, 0] } } },
+      },
       { name: 'C', pbrMetallicRoughness: { baseColorTexture: { index: 2 } } },
     ],
     // textures 0 and 1 read the same image
@@ -134,6 +138,9 @@ describe('TextureAdvisor', () => {
     assert.match(report!.text, /Same image is also read as texture #1/)
     // the shared image gets one action entry, not one per texture
     assert.doesNotMatch(report!.text, /### \d+\. `texture_1`/)
+    // texture #1's transform still surfaces on the image's single entry (#0)
+    const data = JSON.parse(report!.text.match(/```json\n([\s\S]+?)\n```/)![1])
+    assert.equal(data.textures[0].textureTransform, true)
 
     advisor.setModel(null)
     assert.equal(await advisor.exportReport(85), null, 'nothing once replaced')

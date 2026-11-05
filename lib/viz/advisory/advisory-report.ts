@@ -144,7 +144,12 @@ function buildAdvisoryReport({
       /** Other textures reading the same image; the actions apply to the image once. */
       sharesImageWith:
         advice.status === 'analyzed' || advice.status === 'unused' ? advice.sharedWith : [],
-      textureTransform: binding?.layers.some((layer) => layer.transform !== null) ?? false,
+      // The entry speaks for every texture reading this image, so any of them
+      // carrying a transform means the crop must compose with it.
+      textureTransform: [
+        texture.id,
+        ...(advice.status === 'analyzed' || advice.status === 'unused' ? advice.sharedWith : []),
+      ].some((id) => bindings[id]?.layers.some((layer) => layer.transform !== null)),
       crop:
         analyzed?.crop && texture.width && texture.height
           ? cropSpaces(analyzed.crop, texture.width, texture.height)

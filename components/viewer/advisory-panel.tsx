@@ -670,7 +670,8 @@ function AdvisoryPanel({ textures }: { textures: GltfTextureInfo[] }) {
   return (
     <div className="flex flex-col">
       <div className="sticky top-0 z-10 flex flex-col border-b bg-background/90 backdrop-blur-md">
-        <Cluster className="h-8">
+        {/* wraps onto a second row when the panel is narrow */}
+        <Cluster wrap className="min-h-8">
           {OVERLAY_OPTIONS.map((option) => (
             <Button
               key={option.id}
