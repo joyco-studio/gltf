@@ -8,10 +8,15 @@ import type { Viewer } from '../viewer'
 const HELPER_NAME = 'inspected-camera-helper'
 const RENDER_ORDER = 999
 
-/** Displays the native Three.js frustum helper while a camera node is inspected. */
+/**
+ * Displays the native Three.js frustum helper while a camera node is
+ * inspected — hidden while looking through a camera, where it would draw
+ * over the view from its own apex.
+ */
 class CameraHelperSystem implements System {
   private viewer!: Viewer
   private camera: Camera | null = null
+  private previewing = false
   private disposer = new Disposer()
   private helper = this.disposer.add(new CameraHelper(new Camera()))
 
@@ -32,6 +37,16 @@ class CameraHelperSystem implements System {
     this.disposer.add(
       viewer.controls.on('change', ({ inspecting }) => this.sync(inspecting))
     )
+    this.disposer.add(
+      viewer.cameraPreview.on('change', (preview) => {
+        this.previewing = preview !== null
+        this.applyVisibility()
+      })
+    )
+  }
+
+  private applyVisibility() {
+    this.helper.visible = this.camera !== null && !this.previewing
   }
 
   private sync(inspecting: InspectTarget | null) {
@@ -42,7 +57,7 @@ class CameraHelperSystem implements System {
     if (camera === this.camera) return
 
     this.camera = camera
-    this.helper.visible = camera !== null
+    this.applyVisibility()
     if (camera) {
       this.helper.camera = camera
       this.helper.matrix = camera.matrixWorld

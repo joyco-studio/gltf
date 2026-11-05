@@ -13,6 +13,7 @@ import { validateGltf } from './validate'
 import type { GltfValidationSchema } from './validation-schema'
 import { BoundsSystem } from './systems/bounds-system'
 import { CameraHelperSystem } from './systems/camera-helper-system'
+import { CameraPreviewSystem } from './systems/camera-preview-system'
 import { CameraSystem } from './systems/camera-system'
 import { EnvironmentSystem } from './systems/environment-system'
 import { GridSystem } from './systems/grid-system'
@@ -63,6 +64,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly grid: GridSystem
   readonly bounds: BoundsSystem
   readonly cameraHelper: CameraHelperSystem
+  readonly cameraPreview: CameraPreviewSystem
   readonly model: ModelSystem
   readonly highlight: HighlightSystem
   readonly pick: PickSystem
@@ -94,6 +96,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.grid = new GridSystem()
     this.bounds = new BoundsSystem()
     this.cameraHelper = new CameraHelperSystem()
+    this.cameraPreview = new CameraPreviewSystem(canvas)
     this.model = new ModelSystem()
     this.highlight = new HighlightSystem()
     this.pick = new PickSystem(canvas)
@@ -103,7 +106,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.visibility = new VisibilitySystem()
 
     // update order: controls (navigation) → animations (pose) → skeleton
-    // (follows the pose) → render last
+    // (follows the pose) → camera preview (copies the posed camera) → render
     this.systems = [
       this.camera,
       this.controls,
@@ -118,6 +121,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.animations,
       this.skeleton,
       this.visibility,
+      this.cameraPreview,
       this.render,
     ]
 

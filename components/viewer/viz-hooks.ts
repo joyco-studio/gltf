@@ -14,6 +14,7 @@ import {
   EMPTY_SKELETON_SNAPSHOT,
   type SkeletonSnapshot,
 } from '@/lib/viz/systems/skeleton-system'
+import type { CameraPreview } from '@/lib/viz/systems/camera-preview-system'
 import { EMPTY_VISIBILITY_SNAPSHOT } from '@/lib/viz/systems/visibility-system'
 import {
   IDLE_ADVISORY,
@@ -139,6 +140,26 @@ function useHiddenNodes(): ReadonlySet<number> {
   )
 }
 
+const getNoPreview = () => null
+
+/** React's view into the camera the viewport is looking through, if any. */
+function useCameraPreview(): CameraPreview | null {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.cameraPreview.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.cameraPreview.getSnapshot() : getNoPreview,
+    getNoPreview
+  )
+}
+
 const getIdleAdvisory = () => IDLE_ADVISORY
 
 /** React's view into the TextureAdvisor's progressive analysis. */
@@ -162,6 +183,7 @@ function useAdvisoryState(): AdvisorySnapshot {
 export {
   useAdvisoryState,
   useAnimationsState,
+  useCameraPreview,
   useAxesVisible,
   useControlsState,
   useGridVisible,

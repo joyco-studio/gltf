@@ -51,7 +51,30 @@ interface GltfNodeInfo {
   depth: number
   hasChildren: boolean
   meshId: number | null
+  /** Authored projection of the node's camera, if it references one. */
+  camera: GltfCameraInfo | null
 }
+
+/** A glTF camera's authored projection (angles in radians). */
+type GltfCameraInfo =
+  | {
+      id: number
+      type: 'perspective'
+      yfov: number
+      /** null → the camera adopts the rendering viewport's aspect. */
+      aspectRatio: number | null
+      znear: number
+      /** null → infinite projection. */
+      zfar: number | null
+    }
+  | {
+      id: number
+      type: 'orthographic'
+      xmag: number
+      ymag: number
+      znear: number
+      zfar: number
+    }
 
 interface GltfMaterialInfo {
   kind: 'material'
@@ -154,6 +177,21 @@ interface GltfJson {
   }[]
   bufferViews?: { byteLength: number }[]
   nodes?: GltfJsonNode[]
+  cameras?: {
+    type?: string
+    perspective?: {
+      yfov?: number
+      aspectRatio?: number
+      znear?: number
+      zfar?: number
+    }
+    orthographic?: {
+      xmag?: number
+      ymag?: number
+      znear?: number
+      zfar?: number
+    }
+  }[]
   skins?: { joints?: number[] }[]
   scene?: number
   scenes?: { name?: string; nodes?: number[] }[]
@@ -345,6 +383,7 @@ function buildNodeInfos(
       depth,
       hasChildren: children.length > 0,
       meshId,
+      camera: buildCameraInfo(json, node.camera),
     })
 
     for (const child of children) visit(child, depth + 1)
@@ -352,6 +391,31 @@ function buildNodeInfos(
 
   for (const root of roots) visit(root, 0)
   return list
+}
+
+function buildCameraInfo(
+  json: GltfJson,
+  id: number | undefined
+): GltfCameraInfo | null {
+  const camera = id === undefined ? undefined : json.cameras?.[id]
+  if (id === undefined || !camera) return null
+
+  if (camera.type === 'orthographic' && camera.orthographic) {
+    const { xmag = 0, ymag = 0, znear = 0, zfar = 0 } = camera.orthographic
+    return { id, type: 'orthographic', xmag, ymag, znear, zfar }
+  }
+  if (camera.type === 'perspective' && camera.perspective) {
+    const { yfov = 0, aspectRatio, znear = 0, zfar } = camera.perspective
+    return {
+      id,
+      type: 'perspective',
+      yfov,
+      aspectRatio: aspectRatio && aspectRatio > 0 ? aspectRatio : null,
+      znear,
+      zfar: zfar ?? null,
+    }
+  }
+  return null
 }
 
 function classifyNode(
@@ -623,6 +687,7 @@ async function inspectGltf(
 
 export { inspectGltf }
 export type {
+  GltfCameraInfo,
   GltfDocumentInfo,
   GltfNodeInfo,
   GltfNodeType,
