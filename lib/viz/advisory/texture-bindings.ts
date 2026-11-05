@@ -43,8 +43,16 @@ interface TextureBindings {
   wrapT: number
 }
 
+interface BindingsPrimitive {
+  material?: number
+  mode?: number
+  extensions?: {
+    KHR_materials_variants?: { mappings?: { material?: number }[] }
+  }
+}
+
 interface BindingsJson {
-  meshes?: { name?: string; primitives: { material?: number; mode?: number }[] }[]
+  meshes?: { name?: string; primitives: BindingsPrimitive[] }[]
   materials?: Record<string, unknown>[]
   textures?: {
     sampler?: number
@@ -67,6 +75,19 @@ function textureImageIndex(texture: NonNullable<BindingsJson['textures']>[number
     (extension) => typeof extension?.source === 'number'
   )?.source
   return extensionSource ?? texture?.source ?? null
+}
+
+/**
+ * Every material a primitive can draw with: its default plus any
+ * KHR_materials_variants alternatives, which swap in at runtime.
+ */
+function primitiveMaterials(primitive: BindingsPrimitive) {
+  const materials = new Set<number>()
+  if (primitive.material !== undefined) materials.add(primitive.material)
+  for (const mapping of primitive.extensions?.KHR_materials_variants?.mappings ?? []) {
+    if (typeof mapping.material === 'number') materials.add(mapping.material)
+  }
+  return materials
 }
 
 /** Primitive modes that sample textures across an area. */
@@ -127,7 +148,7 @@ function resolveTextureBindings(json: BindingsJson): TextureBindings[] {
 
       meshes.forEach((mesh, meshId) => {
         mesh.primitives.forEach((primitive, primitiveIndex) => {
-          if (primitive.material !== materialId) return
+          if (!primitiveMaterials(primitive).has(materialId)) return
           if (!TRIANGLE_MODES.has(primitive.mode ?? 4)) return
           for (const ref of bound) {
             const key = `${meshId}:${primitiveIndex}:${ref.texCoord}:${ref.transform?.join(',') ?? ''}`

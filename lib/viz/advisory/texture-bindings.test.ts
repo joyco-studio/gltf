@@ -61,6 +61,32 @@ describe('resolveTextureBindings', () => {
     assert.equal(basisu.imageIndex, 5)
   })
 
+  it('counts materials a primitive only uses through KHR_materials_variants', () => {
+    const [variantOnly] = resolveTextureBindings({
+      meshes: [
+        {
+          name: 'Shoe',
+          primitives: [
+            {
+              material: 1,
+              extensions: { KHR_materials_variants: { mappings: [{ material: 0 }] } },
+            },
+          ],
+        },
+      ],
+      materials: [
+        { name: 'Red', pbrMetallicRoughness: { baseColorTexture: { index: 0 } } },
+        { name: 'Default' },
+      ],
+      textures: [{ source: 0 }],
+    })
+    assert.equal(variantOnly.layers.length, 1)
+    assert.deepEqual(
+      variantOnly.users.map(({ materialName, meshName }) => `${meshName}/${materialName}`),
+      ['Shoe/Red']
+    )
+  })
+
   it('marks textures no material binds', () => {
     assert.equal(orphan.referenced, false)
     assert.equal(orphan.users.length, 0)
