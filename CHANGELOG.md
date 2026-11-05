@@ -1,5 +1,14 @@
 # gltf
 
+## 0.6.0
+
+### Minor Changes
+
+- 9bc6f35: Look through the model's cameras: right-click a camera node in the hierarchy and choose Preview camera to render the viewport from it (following its animation, masked to its authored frame). Scrolling zooms the preview; clicking the viewport or pressing ESC returns to the viewer camera; the UI stays usable while previewing. The details panel gains a Camera section for camera nodes (projection, field of view, aspect, clip planes and the live preview zoom).
+- d6888ce: Add feature flags: a Feature flags dialog (from the About popover) toggles experimental features, saved on this device, and `?flags=<id>` links turn them on for whoever opens them.
+  
+  Add a UV Coverage tab behind the `uv-coverage` flag. It projects each texture's UVs to find texels no triangle ever samples, flags textures under a configurable usage threshold (saved locally), overlays unused space or the UV wireframe on the preview, and projects download savings from filling the unused area (bleeding island colors outward) or cropping it. A Report button exports the findings as Markdown + JSON, ready to hand to an agent working in Blender.
+
 ## 0.5.0
 
 ### Minor Changes
