@@ -27,8 +27,8 @@ import { Slider } from '@/components/ui/slider'
 import { formatBytes } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { GltfTextureInfo } from '@/lib/viz/inspect'
-import { buildAdvisoryReport } from '@/lib/viz/advisory/advisory-report'
 import {
+  imageKey,
   isFlagged,
   projectedSavings,
   usageOf,
@@ -90,6 +90,9 @@ function hintFor(advice: TextureAdvice, flagged: boolean) {
     return 'UVs tile past 0–1, so the texture repeats. Coverage is folded and cropping does not apply.'
   }
   if (!flagged) return null
+  if (advice.offset) {
+    return 'Some islands sit outside the 0–1 tile (they repeat back onto the texture), so no crop is offered. Move them into 0–1 to make cropping possible, or paint the unused area one solid color.'
+  }
   if (advice.crop) {
     return `Crop to ${advice.crop.width}×${advice.crop.height} and remap with KHR_texture_transform (offset/scale), or repack the islands to fill the space.`
   }
@@ -287,6 +290,10 @@ function AdvisoryRow({
     advice.status === 'analyzed' || advice.status === 'unused'
       ? advice.download
       : null
+  const sharedWith =
+    advice.status === 'analyzed' || advice.status === 'unused'
+      ? advice.sharedWith
+      : []
 
   const inspect = (
     kind: 'texture' | 'material' | 'mesh',
@@ -363,6 +370,15 @@ function AdvisoryRow({
             {analyzed?.tiling ? (
               <Badge variant="accent" size="sm">
                 tiling
+              </Badge>
+            ) : null}
+            {sharedWith.length ? (
+              <Badge
+                variant="accent"
+                size="sm"
+                title="Other textures read the same image; this advice covers all of them"
+              >
+                shared image · {sharedWith.map((id) => `#${id}`).join(' ')}
               </Badge>
             ) : null}
             {analyzed?.texCoords
@@ -488,15 +504,6 @@ function AdvisoryRow({
   )
 }
 
-async function blobUrlToBase64(url: string) {
-  const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer())
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
-  }
-  return btoa(binary)
-}
-
 function downloadText(text: string, fileName: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
   const link = document.createElement('a')
@@ -509,35 +516,33 @@ function downloadText(text: string, fileName: string) {
 }
 
 /** Exports the advisory as Markdown + JSON for an agent working in Blender. */
-function ReportButton({ threshold }: { threshold: number }) {
+function ReportButton({
+  threshold,
+  onError,
+}: {
+  threshold: number
+  onError: (message: string | null) => void
+}) {
   const { viewer, snapshot } = useViewer()
   const state = useAdvisoryState()
   const [busy, setBusy] = React.useState(false)
-  const ready = state.status === 'ready' && Boolean(snapshot.document)
+  // While a replacement loads, the advisory still describes the old model;
+  // export only once it matches what the rest of the UI shows.
+  const ready = state.status === 'ready' && snapshot.status === 'ready'
 
   async function exportReport() {
-    const document = snapshot.document
-    const model = viewer?.model.current
-    if (state.status !== 'ready' || !document || !model || busy) return
+    if (!viewer || !ready || busy) return
     setBusy(true)
+    onError(null)
     try {
-      const unusedMasks = new Map<number, string>()
-      await Promise.all(
-        state.textures.map(async (advice, id) => {
-          if (advice.status !== 'analyzed' || !advice.overlays.unusedUrl) return
-          unusedMasks.set(id, await blobUrlToBase64(advice.overlays.unusedUrl))
-        })
-      )
-      const report = buildAdvisoryReport({
-        fileName: document.fileName,
-        document,
-        json: model.gltf.parser.json,
-        textures: state.textures,
-        threshold,
-        unusedMasks,
-      })
-      const base = document.fileName.replace(/\.(glb|gltf)$/i, '') || 'model'
-      downloadText(report, `${base}.texture-advisory.md`)
+      // The advisor builds the report from the model it analyzed, never a
+      // newer one, so advice and file data always agree.
+      const report = await viewer.advisory.exportReport(threshold)
+      if (!report) throw new Error('Analysis is no longer current')
+      const base = report.fileName.replace(/\.(glb|gltf)$/i, '') || 'model'
+      downloadText(report.text, `${base}.texture-advisory.md`)
+    } catch {
+      onError('Could not build the report. Try again.')
     } finally {
       setBusy(false)
     }
@@ -611,6 +616,7 @@ function AdvisoryPanel({ textures }: { textures: GltfTextureInfo[] }) {
   const state = useAdvisoryState()
   const [settings, updateSettings] = useAdvisorySettings()
   const [sort, setSort] = React.useState<SortKey>('savings')
+  const [reportError, setReportError] = React.useState<string | null>(null)
 
   // Analysis is lazy: it starts the first time this tab is shown per model.
   React.useEffect(() => {
@@ -651,10 +657,15 @@ function AdvisoryPanel({ textures }: { textures: GltfTextureInfo[] }) {
   const flagged = rows.filter(({ advice }) =>
     isFlagged(advice, settings.threshold)
   )
-  const totalSavings = flagged.reduce(
-    (total, { savings }) => total + Math.max(0, savings),
-    0
-  )
+  // Textures sharing an image share its savings: count each image once.
+  const totalSavings = [
+    ...new Map(
+      flagged.map(({ texture, advice, savings }) => [
+        imageKey(texture.id, advice),
+        Math.max(0, savings),
+      ])
+    ).values(),
+  ].reduce((total, savings) => total + savings, 0)
 
   return (
     <div className="flex flex-col">
@@ -691,7 +702,7 @@ function AdvisoryPanel({ textures }: { textures: GltfTextureInfo[] }) {
             threshold={settings.threshold}
             onChange={(threshold) => updateSettings({ threshold })}
           />
-          <ReportButton threshold={settings.threshold} />
+          <ReportButton threshold={settings.threshold} onError={setReportError} />
         </Cluster>
         <p className="flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
           {analyzed < rows.length ? (
@@ -717,6 +728,11 @@ function AdvisoryPanel({ textures }: { textures: GltfTextureInfo[] }) {
             </>
           )}
         </p>
+        {reportError ? (
+          <p role="alert" className="px-3 pb-1.5 font-mono text-[10px] text-destructive">
+            {reportError}
+          </p>
+        ) : null}
       </div>
 
       {rows.map(({ texture, advice }) => (

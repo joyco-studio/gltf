@@ -53,6 +53,14 @@ describe('resolveTextureBindings', () => {
     assert.equal(linesOnly.layers.length, 0)
   })
 
+  it('resolves the image through source-moving extensions', () => {
+    const [plain, basisu] = resolveTextureBindings({
+      textures: [{ source: 2 }, { source: 0, extensions: { KHR_texture_basisu: { source: 5 } } }],
+    })
+    assert.equal(plain.imageIndex, 2)
+    assert.equal(basisu.imageIndex, 5)
+  })
+
   it('marks textures no material binds', () => {
     assert.equal(orphan.referenced, false)
     assert.equal(orphan.users.length, 0)

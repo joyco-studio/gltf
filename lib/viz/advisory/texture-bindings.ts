@@ -32,6 +32,8 @@ interface TextureLayerRef {
 
 interface TextureBindings {
   textureId: number
+  /** The glTF image this texture reads, or null when it has no source. */
+  imageIndex: number | null
   /** Referenced by at least one material. */
   referenced: boolean
   users: TextureUser[]
@@ -44,7 +46,11 @@ interface TextureBindings {
 interface BindingsJson {
   meshes?: { name?: string; primitives: { material?: number; mode?: number }[] }[]
   materials?: Record<string, unknown>[]
-  textures?: { sampler?: number }[]
+  textures?: {
+    sampler?: number
+    source?: number
+    extensions?: Record<string, { source?: number } | undefined>
+  }[]
   samplers?: { wrapS?: number; wrapT?: number }[]
 }
 
@@ -53,6 +59,14 @@ interface TextureTransformJson {
   rotation?: number
   scale?: number[]
   texCoord?: number
+}
+
+/** The image a texture samples; extensions like KHR_texture_basisu/webp move the source. */
+function textureImageIndex(texture: NonNullable<BindingsJson['textures']>[number] | undefined) {
+  const extensionSource = Object.values(texture?.extensions ?? {}).find(
+    (extension) => typeof extension?.source === 'number'
+  )?.source
+  return extensionSource ?? texture?.source ?? null
 }
 
 /** Primitive modes that sample textures across an area. */
@@ -149,6 +163,7 @@ function resolveTextureBindings(json: BindingsJson): TextureBindings[] {
     const layerList = [...layers.values()]
     return {
       textureId,
+      imageIndex: textureImageIndex(texture),
       referenced,
       users,
       layers: layerList,
@@ -159,5 +174,5 @@ function resolveTextureBindings(json: BindingsJson): TextureBindings[] {
   })
 }
 
-export { collectTextureRefs, resolveTextureBindings }
+export { collectTextureRefs, resolveTextureBindings, textureImageIndex }
 export type { TextureBindings, TextureLayerRef, TextureRef, TextureUser }

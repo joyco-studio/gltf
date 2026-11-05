@@ -20,7 +20,12 @@ class AdvisoryClient {
   private nextId = 0
   private pending = new Map<
     number,
-    { resolve: (value: never) => void; reject: (error: Error) => void }
+    {
+      resolve: (value: never) => void
+      reject: (error: Error) => void
+      /** Re-runs the job on this thread if the worker dies. */
+      inline: () => Promise<unknown>
+    }
   >()
 
   coverage(input: CoverageInput): Promise<CoverageJobResult> {
@@ -46,7 +51,11 @@ class AdvisoryClient {
     if (!worker) return inline()
     const id = this.nextId++
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: never) => void, reject })
+      this.pending.set(id, {
+        resolve: resolve as (value: never) => void,
+        reject,
+        inline,
+      })
       worker.postMessage({ ...message, id })
     })
   }
@@ -70,9 +79,21 @@ class AdvisoryClient {
         if (response.ok) pending.resolve(response.result as never)
         else pending.reject(new Error(response.error))
       })
-      worker.addEventListener('error', () => {
-        this.rejectAll(new Error('Advisory worker crashed'))
-      })
+      // A worker that fails to load (or crashes) never answers: drop it for
+      // good and finish its in-flight jobs on this thread instead.
+      const fail = () => {
+        if (this.worker !== worker) return
+        worker.terminate()
+        this.worker = null
+        this.unavailable = true
+        const pending = [...this.pending.values()]
+        this.pending.clear()
+        for (const job of pending) {
+          job.inline().then(job.resolve as (value: unknown) => void, job.reject)
+        }
+      }
+      worker.addEventListener('error', fail)
+      worker.addEventListener('messageerror', fail)
       this.worker = worker
     } catch {
       this.unavailable = true

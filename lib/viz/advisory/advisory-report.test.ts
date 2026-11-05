@@ -45,6 +45,8 @@ const advice: TextureAdvice[] = [
     coverage: 0.4,
     crop: { x: 100, y: 50, width: 500, height: 250 },
     tiling: false,
+    offset: false,
+    sharedWith: [],
     texCoords: [0],
     users: [{ materialId: 0, materialName: 'Skin', meshId: 0, meshName: 'BodyMesh', slot: 'baseColorTexture', texCoord: 0 }],
     overlays: { unusedUrl: null, wireUrl: null },
@@ -53,6 +55,7 @@ const advice: TextureAdvice[] = [
   {
     status: 'unused',
     reason: 'unreferenced',
+    sharedWith: [],
     download: { status: 'measured', original: 2000, cleared: null, cropped: null },
   },
 ]

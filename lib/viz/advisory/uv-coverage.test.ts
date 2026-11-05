@@ -124,6 +124,100 @@ describe('computeCoverage', () => {
     assert.equal(result.coverage, 0.5)
   })
 
+  it('marks the edge texels clamped UVs outside the image sample', () => {
+    // entirely past the right edge: every sample reads the last column
+    const result = computeCoverage({
+      width: 100,
+      height: 100,
+      padding: 0,
+      layers: [quad(2, 0.2, 2.5, 0.4, { wrapS: WRAP_CLAMP, wrapT: WRAP_CLAMP })],
+    })
+    assert.equal(result.coverage, 20 / 10000)
+    assert.deepEqual(result.bounds, { minU: 0.99, minV: 0.2, maxU: 1, maxV: 0.4 })
+  })
+
+  it('projects a clamped triangle that widens past the edge onto the whole edge span', () => {
+    const result = computeCoverage({
+      width: 100,
+      height: 100,
+      padding: 0,
+      layers: [
+        {
+          uv: new Float32Array([0.9, 0.5, 2, 0, 2, 1]),
+          index: null,
+          transform: null,
+          wrapS: WRAP_CLAMP,
+          wrapT: WRAP_CLAMP,
+        },
+      ],
+    })
+    // the outside part spans v 0..1, so the entire last column is sampled
+    for (let y = 0; y < 100; y += 1) assert.equal(result.mask[y * 100 + 99], 1)
+  })
+
+  it('keeps faces whose UVs collapse to a point or a line', () => {
+    const point = computeCoverage({
+      width: 10,
+      height: 10,
+      padding: 0,
+      layers: [
+        {
+          uv: new Float32Array([0.55, 0.55, 0.55, 0.55, 0.55, 0.55]),
+          index: null,
+          transform: null,
+          wrapS: WRAP_REPEAT,
+          wrapT: WRAP_REPEAT,
+        },
+      ],
+    })
+    assert.equal(point.coverage, 1 / 100)
+    assert.equal(point.mask[5 * 10 + 5], 1)
+
+    const line = computeCoverage({
+      width: 10,
+      height: 10,
+      padding: 0,
+      layers: [
+        {
+          uv: new Float32Array([0.05, 0.55, 0.95, 0.55, 0.5, 0.55]),
+          index: null,
+          transform: null,
+          wrapS: WRAP_REPEAT,
+          wrapT: WRAP_REPEAT,
+        },
+      ],
+    })
+    assert.equal(line.coverage, 10 / 100)
+  })
+
+  it('terminates on extreme UVs and treats them as covering everything', () => {
+    const result = computeCoverage({
+      width: 16,
+      height: 16,
+      padding: 0,
+      layers: [quad(1e20, 0, 1e20 + 1e5, 0.5)],
+    })
+    assert.equal(result.coverage, 1)
+  })
+
+  it('reports islands offset into another repeat tile', () => {
+    const offset = computeCoverage({
+      width: 10,
+      height: 10,
+      padding: 0,
+      layers: [quad(0.1, 1.1, 0.4, 1.4)],
+    })
+    assert.equal(offset.offset, true)
+    assert.equal(offset.tiling, false)
+    const home = computeCoverage({
+      width: 10,
+      height: 10,
+      padding: 0,
+      layers: [quad(0.1, 0.1, 0.4, 0.4)],
+    })
+    assert.equal(home.offset, false)
+  })
+
   it('applies KHR_texture_transform before rasterizing', () => {
     const transform = textureTransformMatrix({ offset: [0.5, 0.5], scale: [0.5, 0.5] })
     const result = computeCoverage({

@@ -15,8 +15,17 @@ const MAX_TILES_PER_TRIANGLE = 16
  * Exported islands routinely end at 1.0004 and similar.
  */
 const TILE_EPSILON = 1e-3
+/** Float tolerance, in mask cells, for edges landing on cell boundaries. */
+const CELL_EPSILON = 1e-3
 /** Half a cell, minus a sliver of float tolerance. */
-const CONSERVATIVE_OFFSET = 0.5 - 1e-3
+const CONSERVATIVE_OFFSET = 0.5 - CELL_EPSILON
+/**
+ * UVs beyond this magnitude carry no usable precision (and would stall tile
+ * loops), so a triangle reaching them is treated as covering everything.
+ */
+const MAX_UV = 1e4
+/** Upper bound on samples taken along a zero-area (segment) triangle. */
+const MAX_SEGMENT_SAMPLES = 1e5
 
 /**
  * One primitive's UVs as seen by one texture binding. `transform` is the
@@ -57,6 +66,17 @@ interface CoverageResult {
   bounds: UvRect | null
   /** Some triangle straddles a tile seam on a repeating axis. */
   tiling: boolean
+  /**
+   * Some island lives in a repeat tile other than 0–1. It folds back onto the
+   * texture exactly, but a crop remap would have to undo that offset.
+   */
+  offset: boolean
+}
+
+interface FoldStats {
+  tiling: boolean
+  saturated: boolean
+  offset: boolean
 }
 
 type TriangleVisitor = (
@@ -98,16 +118,17 @@ function fold(value: number, tile: number, wrap: number) {
 
 /**
  * Visit every triangle of a layer in mask-cell space, with UVs transformed
- * and wrapped tiles folded back over the texture. Returns whether the layer
- * tiles (some triangle crosses a tile seam) and whether some triangle spans so many tiles
- * that the whole texture must be treated as covered.
+ * and wrapped tiles folded back over the texture. Reports whether some
+ * triangle crosses a tile seam (tiling), sits wholly in another tile
+ * (offset), or spans so many tiles — or such extreme UVs — that the whole
+ * texture must be treated as covered (saturated).
  */
 function forEachFoldedTriangle(
   layer: UvLayer,
   width: number,
   height: number,
   visit: TriangleVisitor
-): { tiling: boolean; saturated: boolean } {
+): FoldStats {
   const { uv, index, transform, wrapS, wrapT } = layer
   const vertexCount = uv.length / 2
   const triangleCount = Math.floor((index ? index.length : vertexCount) / 3)
@@ -116,6 +137,7 @@ function forEachFoldedTriangle(
   const vs = [0, 0, 0]
   let tiling = false
   let saturated = false
+  let offset = false
 
   for (let triangle = 0; triangle < triangleCount; triangle += 1) {
     let minU = Infinity
@@ -145,19 +167,29 @@ function forEachFoldedTriangle(
       if (v > maxV) maxV = v
     }
     if (!valid) continue
+    if (Math.max(-minU, maxU, -minV, maxV) > MAX_UV) {
+      saturated = true
+      continue
+    }
 
     const [tu0, tu1] = tileRange(minU, maxU, wrapS)
     const [tv0, tv1] = tileRange(minV, maxV, wrapT)
     // Islands merely offset into another tile fold back exactly; a triangle
     // straddling a seam means the sampler's wrap is genuinely in use.
     if (tu1 > tu0 || tv1 > tv0) tiling = true
-    if ((tu1 - tu0 + 1) * (tv1 - tv0 + 1) > MAX_TILES_PER_TRIANGLE) {
+    else if (tu0 !== 0 || tv0 !== 0) offset = true
+    const tilesU = tu1 - tu0 + 1
+    const tilesV = tv1 - tv0 + 1
+    if (tilesU * tilesV > MAX_TILES_PER_TRIANGLE) {
       saturated = true
       continue
     }
 
-    for (let tu = tu0; tu <= tu1; tu += 1) {
-      for (let tv = tv0; tv <= tv1; tv += 1) {
+    // Small relative counters: always terminate, whatever the tile index.
+    for (let i = 0; i < tilesU; i += 1) {
+      const tu = tu0 + i
+      for (let j = 0; j < tilesV; j += 1) {
+        const tv = tv0 + j
         visit(
           fold(us[0], tu, wrapS) * width,
           fold(vs[0], tv, wrapT) * height,
@@ -170,7 +202,128 @@ function forEachFoldedTriangle(
     }
   }
 
-  return { tiling, saturated }
+  return { tiling, saturated, offset }
+}
+
+type Point = readonly [number, number]
+
+/** Sutherland–Hodgman clip of a convex polygon to one side of an axis line. */
+function clipPolygon(polygon: Point[], axis: 0 | 1, at: number, keepBelow: boolean) {
+  const inside = (point: Point) => (keepBelow ? point[axis] <= at : point[axis] >= at)
+  const result: Point[] = []
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index]
+    const previous = polygon[(index + polygon.length - 1) % polygon.length]
+    if (inside(current) !== inside(previous)) {
+      const t = (at - previous[axis]) / (current[axis] - previous[axis])
+      result.push([
+        previous[0] + (current[0] - previous[0]) * t,
+        previous[1] + (current[1] - previous[1]) * t,
+      ])
+    }
+    if (inside(current)) result.push(current)
+  }
+  return result
+}
+
+function clampCell(value: number, size: number) {
+  return Math.min(size - 1, Math.max(0, Math.floor(value)))
+}
+
+/**
+ * CLAMP_TO_EDGE samples the outermost texel row/column for every UV past the
+ * edge. Mark, on each clamped side, the edge cells that the triangle's
+ * outside part projects onto (corners fall out of the clamped ranges).
+ */
+function markClampedEdges(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  clampX: boolean,
+  clampY: boolean,
+  triangle: Point[]
+) {
+  const sides: [axis: 0 | 1, at: number, keepBelow: boolean][] = []
+  if (clampX) sides.push([0, 0, true], [0, width, false])
+  if (clampY) sides.push([1, 0, true], [1, height, false])
+
+  for (const [axis, at, keepBelow] of sides) {
+    const outside = clipPolygon(triangle, axis, at, keepBelow)
+    if (outside.length === 0) continue
+    const other = axis === 0 ? 1 : 0
+    const along = outside.map((point) => point[other])
+    const size = other === 0 ? width : height
+    // a span ending exactly on a cell boundary doesn't reach the next cell
+    const from = clampCell(Math.min(...along) + CELL_EPSILON, size)
+    const to = clampCell(Math.max(...along) - CELL_EPSILON, size)
+    const edge = keepBelow ? 0 : (axis === 0 ? width : height) - 1
+    for (let cell = from; cell <= to; cell += 1) {
+      mask[axis === 0 ? cell * width + edge : edge * width + cell] = 1
+    }
+  }
+}
+
+/**
+ * A zero-area triangle still samples the texture along a segment (or at a
+ * point) — a face whose UVs coincide shows that one color. Sample it densely
+ * enough to touch every cell it crosses, clamping onto the grid.
+ */
+function markSegment(mask: Uint8Array, width: number, height: number, triangle: Point[]) {
+  let [start, end] = [triangle[0], triangle[1]]
+  let longest = -1
+  for (let i = 0; i < 3; i += 1) {
+    for (let j = i + 1; j < 3; j += 1) {
+      const length = Math.hypot(
+        triangle[j][0] - triangle[i][0],
+        triangle[j][1] - triangle[i][1]
+      )
+      if (length > longest) {
+        longest = length
+        start = triangle[i]
+        end = triangle[j]
+      }
+    }
+  }
+  const samples = Math.min(MAX_SEGMENT_SAMPLES, Math.ceil(longest * 2) + 1)
+  for (let sample = 0; sample < samples; sample += 1) {
+    const t = samples === 1 ? 0 : sample / (samples - 1)
+    const x = clampCell(start[0] + (end[0] - start[0]) * t, width)
+    const y = clampCell(start[1] + (end[1] - start[1]) * t, height)
+    mask[y * width + x] = 1
+  }
+}
+
+/**
+ * Mark every cell a triangle (in cell space) can make the sampler read:
+ * its conservative interior, its clamped-edge projections, and — when it has
+ * no area — the segment or point it collapses to.
+ */
+function rasterize(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  clampX: boolean,
+  clampY: boolean,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+) {
+  const triangle: Point[] = [
+    [x0, y0],
+    [x1, y1],
+    [x2, y2],
+  ]
+  if ((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0) === 0) {
+    markSegment(mask, width, height, triangle)
+    return
+  }
+  rasterizeTriangle(mask, width, height, x0, y0, x1, y1, x2, y2)
+  if (clampX || clampY) {
+    markClampedEdges(mask, width, height, clampX, clampY, triangle)
+  }
 }
 
 /**
@@ -272,13 +425,17 @@ function computeCoverage({
   let mask: Uint8Array = new Uint8Array(width * height)
   let tiling = false
   let saturated = false
+  let offset = false
 
   for (const layer of layers) {
+    const clampX = layer.wrapS === WRAP_CLAMP
+    const clampY = layer.wrapT === WRAP_CLAMP
     const result = forEachFoldedTriangle(layer, width, height, (...corners) =>
-      rasterizeTriangle(mask, width, height, ...corners)
+      rasterize(mask, width, height, clampX, clampY, ...corners)
     )
     tiling ||= result.tiling
     saturated ||= result.saturated
+    offset ||= result.offset
   }
 
   if (saturated) mask.fill(1)
@@ -315,6 +472,7 @@ function computeCoverage({
           }
         : null,
     tiling,
+    offset,
   }
 }
 

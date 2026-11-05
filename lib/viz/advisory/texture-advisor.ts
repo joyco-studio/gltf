@@ -6,13 +6,15 @@ import { EventEmitter } from '../event-emitter'
 import type { GltfDocumentInfo, GltfTextureInfo } from '../inspect'
 import { getTextureBlob } from '../texture-download'
 import { AdvisoryClient } from './advisory-client'
-import { canReencode, type TexelRect } from './advisory-jobs'
 import {
-  resolveTextureBindings,
-  type TextureBindings,
-  type TextureUser,
-} from './texture-bindings'
+  type DownloadProjection,
+  type TextureAdvice,
+} from './advice'
+import { canReencode } from './advisory-jobs'
+import { buildAdvisoryReport } from './advisory-report'
+import { resolveTextureBindings, type TextureBindings } from './texture-bindings'
 import type { UvLayer, UvRect } from './uv-coverage'
+import type { TexelRect } from './advisory-jobs'
 
 /**
  * Texture-space advisory: for every texture, how much of it the model's UVs
@@ -26,45 +28,6 @@ const MASK_MAX_SIZE = 512
 const PADDING_TEXELS = 4
 /** A crop is only worth suggesting when it drops at least this share of texels. */
 const MIN_CROP_REDUCTION = 0.25
-
-type DownloadProjection =
-  | { status: 'pending' }
-  | { status: 'unavailable' }
-  | {
-      /** `measured` re-encoded the image; `estimated` scaled by area. */
-      status: 'measured' | 'estimated'
-      original: number
-      /** Same resolution, unused texels flattened. */
-      cleared: number | null
-      /** Cropped to the used bounds (and flattened, when measured). */
-      cropped: number | null
-    }
-
-interface TextureOverlays {
-  unusedUrl: string | null
-  wireUrl: string | null
-}
-
-type TextureAdvice =
-  | { status: 'pending' }
-  | {
-      status: 'unused'
-      /** Not bound by any material, or bound only by materials no primitive draws. */
-      reason: 'unreferenced' | 'no-geometry'
-      download: DownloadProjection
-    }
-  | {
-      status: 'analyzed'
-      coverage: number
-      /** Used bounds in texels, or null when cropping would not shrink it. */
-      crop: TexelRect | null
-      tiling: boolean
-      texCoords: number[]
-      users: TextureUser[]
-      overlays: TextureOverlays
-      download: DownloadProjection
-    }
-  | { status: 'failed'; message: string }
 
 type AdvisorySnapshot =
   | { status: 'idle' }
@@ -84,36 +47,6 @@ interface AdvisoryModel {
 }
 
 const IDLE_ADVISORY: AdvisorySnapshot = { status: 'idle' }
-
-/** Utilization 0..1, or null while unknown. Unused textures are 0. */
-function usageOf(advice: TextureAdvice) {
-  if (advice.status === 'unused') return 0
-  if (advice.status === 'analyzed') return advice.coverage
-  return null
-}
-
-/** Whether a texture falls under the usage threshold (0–100). */
-function isFlagged(advice: TextureAdvice, threshold: number) {
-  if (advice.status === 'unused') return true
-  // Tiled textures repeat by design; folded coverage isn't reclaimable space.
-  if (advice.status !== 'analyzed' || advice.tiling) return false
-  return advice.coverage * 100 < threshold
-}
-
-/** Bytes a texture could stop shipping, taking the best available fix. */
-function projectedSavings(advice: TextureAdvice): number | null {
-  if (advice.status !== 'unused' && advice.status !== 'analyzed') return null
-  const { download } = advice
-  if (download.status !== 'measured' && download.status !== 'estimated') {
-    return null
-  }
-  if (advice.status === 'unused') return download.original
-  const best = Math.min(
-    download.cleared ?? download.original,
-    download.cropped ?? download.original
-  )
-  return Math.max(0, download.original - best)
-}
 
 function maskSize(texture: GltfTextureInfo) {
   if (!texture.width || !texture.height) {
@@ -163,11 +96,37 @@ function readUvs(geometry: BufferGeometry, texCoord: number) {
   return { uv, index }
 }
 
+type Mask = { mask: Uint8Array; width: number; height: number }
+
+/**
+ * Textures that read the same image. Coverage, crops and savings belong to
+ * the image, so they are computed over every member's UVs at once.
+ */
+function groupByImage(bindings: TextureBindings[], textureCount: number) {
+  const groups = new Map<string, number[]>()
+  for (let id = 0; id < textureCount; id += 1) {
+    const imageIndex = bindings[id]?.imageIndex ?? null
+    const key = imageIndex === null ? `texture:${id}` : `image:${imageIndex}`
+    groups.set(key, [...(groups.get(key) ?? []), id])
+  }
+  return [...groups.values()]
+}
+
+function base64(bytes: Uint8Array) {
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return btoa(binary)
+}
+
 class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   private snapshot: AdvisorySnapshot = IDLE_ADVISORY
   private model: AdvisoryModel | null = null
   private run: Disposer | null = null
   private client: AdvisoryClient | null = null
+  /** Unused-texel masks (PNG) of the current run, for the report. */
+  private unusedMasks = new Map<number, Blob>()
 
   getSnapshot(): AdvisorySnapshot {
     return this.snapshot
@@ -177,8 +136,38 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   setModel(model: AdvisoryModel | null) {
     this.run?.dispose()
     this.run = null
+    // A job still running for the old model would hold up the new one's queue.
+    if (this.snapshot.status === 'analyzing') {
+      this.client?.dispose()
+      this.client = null
+    }
+    this.unusedMasks = new Map()
     this.model = model
     this.setSnapshot(IDLE_ADVISORY)
+  }
+
+  /**
+   * The finished analysis as a Markdown + JSON hand-off report. Built only
+   * from the model this analysis ran on, never from a newer one mid-load.
+   */
+  async exportReport(threshold: number) {
+    const { model, snapshot, unusedMasks } = this
+    if (!model || snapshot.status !== 'ready') return null
+    const masks = new Map<number, string>()
+    for (const [id, blob] of unusedMasks) {
+      masks.set(id, base64(new Uint8Array(await blob.arrayBuffer())))
+    }
+    return {
+      fileName: model.document.fileName,
+      text: buildAdvisoryReport({
+        fileName: model.document.fileName,
+        document: model.document,
+        json: model.gltf.parser.json,
+        textures: snapshot.textures,
+        threshold,
+        unusedMasks: masks,
+      }),
+    }
   }
 
   /** Begin analysis for the current model (idempotent). */
@@ -211,35 +200,40 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   private async analyze(model: AdvisoryModel, run: Disposer) {
     const { gltf, document } = model
     const bindings = resolveTextureBindings(gltf.parser.json)
+    const groups = groupByImage(bindings, document.textures.length)
     const textures: TextureAdvice[] = document.textures.map(() => ({
       status: 'pending',
     }))
-    const masks = new Map<number, { mask: Uint8Array; width: number; height: number }>()
+    const masks = new Map<number[], Mask>()
 
-    const commit = (id: number, advice: TextureAdvice) => {
+    const commit = (group: number[], advice: TextureAdvice) => {
       if (run.disposed) return
-      textures[id] = advice
+      for (const id of group) {
+        textures[id] =
+          advice.status === 'analyzed' || advice.status === 'unused'
+            ? { ...advice, sharedWith: group.filter((other) => other !== id) }
+            : advice
+      }
       this.setSnapshot({ status: 'analyzing', textures: [...textures] })
     }
     this.setSnapshot({ status: 'analyzing', textures: [...textures] })
 
-    // Pass 1: coverage for every texture, so the list fills in quickly.
+    // Pass 1: coverage for every image, so the list fills in quickly.
     const uvCache = new Map<string, ReturnType<typeof readUvs>>()
-    for (const texture of document.textures) {
+    for (const group of groups) {
       if (run.disposed) return
-      const binding = bindings[texture.id]
       try {
         const advice = await this.analyzeCoverage(
           gltf,
-          texture,
-          binding,
+          document.textures[group[0]],
+          group.map((id) => bindings[id]).filter(Boolean),
           uvCache,
           run,
-          masks
+          (mask) => masks.set(group, mask)
         )
-        commit(texture.id, advice)
+        commit(group, advice)
       } catch (error) {
-        commit(texture.id, {
+        commit(group, {
           status: 'failed',
           message: error instanceof Error ? error.message : String(error),
         })
@@ -248,17 +242,17 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     uvCache.clear()
 
     // Pass 2: download projections (image re-encodes are the slow part).
-    for (const texture of document.textures) {
+    for (const group of groups) {
       if (run.disposed) return
-      const advice = textures[texture.id]
+      const advice = textures[group[0]]
       if (advice.status !== 'unused' && advice.status !== 'analyzed') continue
       const download = await this.projectDownload(
         model,
-        texture,
+        document.textures[group[0]],
         advice,
-        masks.get(texture.id) ?? null
+        masks.get(group) ?? null
       ).catch((): DownloadProjection => ({ status: 'unavailable' }))
-      commit(texture.id, { ...advice, download })
+      commit(group, { ...advice, download })
     }
 
     if (!run.disposed) {
@@ -269,37 +263,41 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   private async analyzeCoverage(
     gltf: GLTF,
     texture: GltfTextureInfo,
-    binding: TextureBindings | undefined,
+    bindings: TextureBindings[],
     uvCache: Map<string, ReturnType<typeof readUvs>>,
     run: Disposer,
-    masks: Map<number, { mask: Uint8Array; width: number; height: number }>
+    keepMask: (mask: Mask) => void
   ): Promise<TextureAdvice> {
     const pending: DownloadProjection = { status: 'pending' }
-    if (!binding?.referenced) {
-      return { status: 'unused', reason: 'unreferenced', download: pending }
+    if (!bindings.some((binding) => binding.referenced)) {
+      return { status: 'unused', reason: 'unreferenced', sharedWith: [], download: pending }
     }
 
+    // Every texture reading this image contributes its UVs, each through
+    // its own sampler's wrap modes.
     const layers: UvLayer[] = []
-    for (const ref of binding.layers) {
-      const key = `${ref.meshId}:${ref.primitiveIndex}:${ref.texCoord}`
-      if (!uvCache.has(key)) {
-        const mesh = (await gltf.parser.getDependency('mesh', ref.meshId)) as Object3D
-        const object = primitiveObject(mesh, ref.primitiveIndex) as
-          | (Object3D & { geometry?: BufferGeometry })
-          | null
-        uvCache.set(key, object?.geometry ? readUvs(object.geometry, ref.texCoord) : null)
+    for (const binding of bindings) {
+      for (const ref of binding.layers) {
+        const key = `${ref.meshId}:${ref.primitiveIndex}:${ref.texCoord}`
+        if (!uvCache.has(key)) {
+          const mesh = (await gltf.parser.getDependency('mesh', ref.meshId)) as Object3D
+          const object = primitiveObject(mesh, ref.primitiveIndex) as
+            | (Object3D & { geometry?: BufferGeometry })
+            | null
+          uvCache.set(key, object?.geometry ? readUvs(object.geometry, ref.texCoord) : null)
+        }
+        const uvs = uvCache.get(key)
+        if (!uvs) continue
+        layers.push({
+          ...uvs,
+          transform: ref.transform,
+          wrapS: binding.wrapS,
+          wrapT: binding.wrapT,
+        })
       }
-      const uvs = uvCache.get(key)
-      if (!uvs) continue
-      layers.push({
-        ...uvs,
-        transform: ref.transform,
-        wrapS: binding.wrapS,
-        wrapT: binding.wrapT,
-      })
     }
     if (layers.length === 0) {
-      return { status: 'unused', reason: 'no-geometry', download: pending }
+      return { status: 'unused', reason: 'no-geometry', sharedWith: [], download: pending }
     }
 
     const { width, height, scale } = maskSize(texture)
@@ -309,7 +307,12 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
       padding: Math.max(1, Math.ceil(PADDING_TEXELS * scale)),
       layers,
     })
-    masks.set(texture.id, { mask: result.mask, width, height })
+    keepMask({ mask: result.mask, width, height })
+    if (result.unusedOverlay) {
+      for (const binding of bindings) {
+        this.unusedMasks.set(binding.textureId, result.unusedOverlay)
+      }
+    }
 
     const url = (blob: Blob | null) => {
       if (!blob || typeof URL.createObjectURL !== 'function') return null
@@ -321,13 +324,16 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     return {
       status: 'analyzed',
       coverage: result.coverage,
+      // Cropping remaps UVs; tiled or tile-offset islands would land wrong.
       crop:
-        result.tiling || !result.bounds
+        result.tiling || result.offset || !result.bounds
           ? null
           : cropRect(result.bounds, texture.width, texture.height),
       tiling: result.tiling,
-      texCoords: binding.texCoords,
-      users: binding.users,
+      offset: result.offset,
+      sharedWith: [],
+      texCoords: [...new Set(bindings.flatMap((binding) => binding.texCoords))].sort(),
+      users: bindings.flatMap((binding) => binding.users),
       overlays: {
         unusedUrl: url(result.unusedOverlay),
         wireUrl: url(result.wireOverlay),
@@ -340,7 +346,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
     { gltf, files }: AdvisoryModel,
     texture: GltfTextureInfo,
     advice: Extract<TextureAdvice, { status: 'unused' | 'analyzed' }>,
-    mask: { mask: Uint8Array; width: number; height: number } | null
+    mask: Mask | null
   ): Promise<DownloadProjection> {
     const blob = await getTextureBlob(texture, gltf, files)
     const original = blob.size
@@ -389,10 +395,7 @@ class TextureAdvisor extends EventEmitter<AdvisoryEvents> {
   }
 }
 
-export { IDLE_ADVISORY, TextureAdvisor, isFlagged, projectedSavings, usageOf }
-export type {
-  AdvisorySnapshot,
-  DownloadProjection,
-  TextureAdvice,
-  TextureOverlays,
-}
+export { IDLE_ADVISORY, TextureAdvisor }
+export { imageKey, isFlagged, projectedSavings, usageOf } from './advice'
+export type { DownloadProjection, TextureAdvice, TextureOverlays } from './advice'
+export type { AdvisorySnapshot }

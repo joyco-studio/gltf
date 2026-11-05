@@ -1,10 +1,6 @@
 import type { GltfDocumentInfo } from '../inspect'
 import type { TexelRect } from './advisory-jobs'
-import {
-  isFlagged,
-  projectedSavings,
-  type TextureAdvice,
-} from './texture-advisor'
+import { isFlagged, projectedSavings, type TextureAdvice } from './advice'
 import { resolveTextureBindings } from './texture-bindings'
 
 /**
@@ -19,11 +15,6 @@ const REPORT_SCHEMA = 'gltf-texture-advisory/v1'
 type ReportAction = 'remove' | 'crop' | 'flatten' | 'repack'
 
 interface ReportJson {
-  textures?: {
-    name?: string
-    source?: number
-    extensions?: Record<string, { source?: number }>
-  }[]
   images?: { name?: string; uri?: string; mimeType?: string; bufferView?: number }[]
 }
 
@@ -117,13 +108,9 @@ function buildAdvisoryReport({
   const entries = document.textures.map((texture) => {
     const advice = textures[texture.id] ?? { status: 'pending' as const }
     const flagged = isFlagged(advice, threshold)
-    const definition = gltfJson.textures?.[texture.id]
-    const extensionSource = Object.values(definition?.extensions ?? {}).find(
-      (extension) => typeof extension?.source === 'number'
-    )?.source
-    const imageIndex = extensionSource ?? definition?.source ?? null
-    const image = imageIndex !== null ? gltfJson.images?.[imageIndex] : undefined
     const binding = bindings[texture.id]
+    const imageIndex = binding?.imageIndex ?? null
+    const image = imageIndex !== null ? gltfJson.images?.[imageIndex] : undefined
     const analyzed = advice.status === 'analyzed' ? advice : null
     const download =
       advice.status === 'analyzed' || advice.status === 'unused'
@@ -152,6 +139,10 @@ function buildAdvisoryReport({
       actions: actionsFor(advice, flagged),
       usage: analyzed ? round(analyzed.coverage, 4) : advice.status === 'unused' ? 0 : null,
       tiling: analyzed?.tiling ?? false,
+      uvOffset: analyzed?.offset ?? false,
+      /** Other textures reading the same image; the actions apply to the image once. */
+      sharesImageWith:
+        advice.status === 'analyzed' || advice.status === 'unused' ? advice.sharedWith : [],
       textureTransform: binding?.layers.some((layer) => layer.transform !== null) ?? false,
       crop:
         analyzed?.crop && texture.width && texture.height
@@ -177,8 +168,13 @@ function buildAdvisoryReport({
     }
   })
 
+  // One action list per image: textures sharing an image share its advice.
   const actionable = entries
-    .filter((entry) => entry.actions.length > 0)
+    .filter(
+      (entry) =>
+        entry.actions.length > 0 &&
+        entry.sharesImageWith.every((other) => other > entry.id)
+    )
     .sort((a, b) => (b.bytes?.savings ?? 0) - (a.bytes?.savings ?? 0))
   const totalSavings = actionable.reduce(
     (total, entry) => total + (entry.bytes?.savings ?? 0),
@@ -219,11 +215,12 @@ function buildAdvisoryReport({
     '',
     '- **Coordinate spaces.** glTF and PNG use a top-left origin; Blender uses bottom-left. Every rect in the JSON comes in both (`pixelsTopLeft`/`pixelsBottomLeft`, `uvGltf`/`uvBlender`). Use the Blender variants inside Blender.',
     '- **Finding things.** Images, materials and meshes keep their glTF names on import. Objects are named after glTF nodes (`objects`). Embedded images may show up as packed images.',
-    '- **`remove`.** Nothing samples this image. Delete the image, and any material that is listed as unused because no mesh draws it.',
+    '- **`remove`.** No texture that reads this image is sampled by any mesh. The importer usually skips such images and re-exporting drops them; if it is in `bpy.data.images` with no users, delete it. Never delete an image whose `sharesImageWith` textures appear elsewhere with other actions.',
     '- **`crop`.** Crop the image to `crop.pixelsBottomLeft` and save it in the same format. Then remap sampling so the meshes still line up. **Prefer a Mapping node** (type Point, values in `crop.mappingNode`) between the UV source and this Image Texture node, in every material listed in `usedBy`. The glTF exporter writes it out as `KHR_texture_transform`. Only edit mesh UVs directly (`crop.uvRemap`) when every texture sampled through that UV map gets exactly the same crop, because editing UVs moves all of them.',
     '- **`flatten`.** Fill every texel that the UV islands never sample with one flat color (opaque black, or the island edge color), keeping the resolution. This only shrinks the compressed file. `unusedMaskPng` marks those texels (flip it vertically for Blender). You can also recompute the mask by rasterizing the listed objects\' faces in that UV map, plus a 4-texel margin.',
     '- **`repack`.** The unused space sits between islands, so cropping cannot reclaim it. Pack the islands (UV › Pack Islands, margin ≥ 4 px at this resolution) and re-bake every texture in the set from the old layout. Do this only if baking is available; otherwise do `flatten` alone.',
-    '- **Caution.** Textures marked `tiling` repeat by design: never crop them. If `textureTransform` is true, the material already has a Mapping node, so compose your offset/scale with it instead of replacing it.',
+    '- **Shared images.** Several glTF textures can read one image (`sharesImageWith`). Coverage and actions already account for all of them, and each image is listed once below; edit the image once and update every material that samples it.',
+    '- **Caution.** Textures marked `tiling` repeat by design: never crop them. `uvOffset` means some islands sit in a repeat tile outside 0–1, so no crop is given; move those islands into 0–1 first if you want to crop. If `textureTransform` is true, the material already has a Mapping node, so compose your offset/scale with it instead of replacing it.',
     '',
     '## Actions',
     '',
@@ -254,6 +251,14 @@ function buildAdvisoryReport({
       lines.push(
         `- Sampled by material \`${user.material}\` (${user.slot}, UV map ${user.uvMapIndex}) on mesh \`${user.mesh}\`${user.objects.length ? `, objects ${user.objects.map((name) => `\`${name}\``).join(', ')}` : ''}`
       )
+    }
+    if (entry.sharesImageWith.length) {
+      lines.push(
+        `- Same image is also read as texture ${entry.sharesImageWith.map((id) => `#${id}`).join(', ')} (included above).`
+      )
+    }
+    if (entry.uvOffset) {
+      lines.push('- Some islands sit outside the 0–1 tile, so no crop is given.')
     }
     if (entry.textureTransform) lines.push('- Already has a texture transform: compose with it.')
     lines.push('')

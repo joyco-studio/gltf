@@ -20,12 +20,16 @@ function createLocalStore<T>(
 ): LocalStore<T> {
   const listeners = new Set<() => void>()
   let cached: { raw: string | null; value: T } | null = null
+  /** Set once a write fails (quota, blocked storage); reads then use it. */
   let fallbackRaw: string | null = null
+  let storageFailed = false
 
   const readRaw = () => {
+    if (storageFailed) return fallbackRaw
     try {
       return window.localStorage.getItem(key)
     } catch {
+      storageFailed = true
       return fallbackRaw
     }
   }
@@ -41,8 +45,11 @@ function createLocalStore<T>(
     set(next) {
       const raw = JSON.stringify(next)
       try {
+        if (storageFailed) throw new Error('storage unavailable')
         window.localStorage.setItem(key, raw)
       } catch {
+        // Keep working for this session even though nothing persists.
+        storageFailed = true
         fallbackRaw = raw
       }
       for (const listener of listeners) listener()
