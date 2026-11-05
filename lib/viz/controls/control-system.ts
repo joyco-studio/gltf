@@ -280,6 +280,10 @@ class ControlSystem
   }
 
   update(dt: number) {
+    // Navigation is frozen while looking through a model camera: keyboard
+    // fly movement would otherwise move the hidden viewer camera unseen,
+    // and detaching must return to the untouched view.
+    if (this.viewer.cameraPreview.camera) return
     this.active.update(dt)
 
     // track camera↔axis alignment; publish only on transitions so the UI

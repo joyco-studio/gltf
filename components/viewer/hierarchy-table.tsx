@@ -173,7 +173,8 @@ function HierarchyTable({
         name: node.name,
       })}
       rowActions={(node) =>
-        node.objectType === "camera" && snapshot.status !== "loading" ? (
+        // node.camera, not objectType: a mesh node can carry a camera too
+        node.camera && snapshot.status !== "loading" ? (
           <ContextMenuItem
             onSelect={() => viewer?.cameraPreview.start(node.id, node.name)}
           >

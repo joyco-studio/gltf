@@ -61,7 +61,8 @@ class PickSystem implements System {
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     )
-    this.raycaster.setFromCamera(this.pointer, this.viewer.camera.camera)
+    // what's on screen — possibly a camera preview, not the viewer camera
+    this.raycaster.setFromCamera(this.pointer, this.viewer.render.camera)
 
     // sorted near→far; the first hit that maps to a document node wins
     for (const hit of this.raycaster.intersectObjects(meshes, false)) {

@@ -1,4 +1,9 @@
-import { NoToneMapping, SRGBColorSpace, WebGPURenderer } from 'three/webgpu'
+import {
+  NoToneMapping,
+  SRGBColorSpace,
+  WebGPURenderer,
+  type Camera,
+} from 'three/webgpu'
 
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
@@ -16,6 +21,7 @@ class RenderSystem implements System {
   private ready = false
   private disposed = false
   private viewer!: Viewer
+  private lastCamera: Camera | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     // opaque canvas: transparent-canvas compositing mangles low-alpha
@@ -56,12 +62,21 @@ class RenderSystem implements System {
     this.renderer.setSize(width, height, false)
   }
 
+  /**
+   * The camera behind the pixels on screen — a camera preview when one is
+   * attached. Screen-space queries (picking) must use this, not the viewer
+   * camera: a click detaches the preview before picking, yet the user aimed
+   * at what was rendered.
+   */
+  get camera(): Camera {
+    return this.lastCamera ?? this.viewer.camera.camera
+  }
+
   update() {
     if (!this.ready) return
-    this.renderer.render(
-      this.viewer.scene,
+    this.lastCamera =
       this.viewer.cameraPreview.camera ?? this.viewer.camera.camera
-    )
+    this.renderer.render(this.viewer.scene, this.lastCamera)
   }
 
   dispose() {
