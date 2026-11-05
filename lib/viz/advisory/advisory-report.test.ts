@@ -109,4 +109,28 @@ describe('buildAdvisoryReport', () => {
     assert.equal(skin.unusedMaskPng, 'AAAA')
     assert.deepEqual(skin.mask, { width: 512, height: 256, paddingTexels: 8 })
   })
+
+  it('withholds the direct UV remap when the texture already has a transform', () => {
+    const transformed = {
+      ...json,
+      materials: [
+        {
+          name: 'Skin',
+          pbrMetallicRoughness: {
+            baseColorTexture: {
+              index: 0,
+              extensions: { KHR_texture_transform: { offset: [0.5, 0] } },
+            },
+          },
+        },
+      ],
+    }
+    const [entry] = parse(
+      buildAdvisoryReport({ fileName: 'hero.glb', document, json: transformed, textures: advice, threshold: 85 })
+    ).textures
+    assert.equal(entry.textureTransform, true)
+    assert.equal(entry.crop.uvRemap, null)
+    assert.ok(entry.crop.mappingNode, 'the Mapping node path stays available')
+    assert.notEqual(skin.crop.uvRemap, null, 'untransformed textures keep it')
+  })
 })
