@@ -79,6 +79,18 @@ describe('computeCoverage', () => {
     assert.deepEqual(result.bounds, { minU: 0, minV: 0, maxU: 0.5, maxV: 1 })
   })
 
+  it('keeps sliver islands just inside a repeating edge', () => {
+    const result = computeCoverage({
+      width: 100,
+      height: 100,
+      padding: 0,
+      layers: [quad(0.9995, 0.5, 0.9998, 0.6)],
+    })
+    assert.equal(result.tiling, false)
+    assert.equal(result.offset, false)
+    assert.equal(result.mask[55 * 100 + 99], 1)
+  })
+
   it('flags tiling when a triangle straddles a tile seam', () => {
     const result = computeCoverage({
       width: 100,

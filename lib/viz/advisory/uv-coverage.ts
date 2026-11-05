@@ -115,11 +115,20 @@ function textureTransformMatrix(transform: {
   return [cos * sx, -sin * sy, ox, sin * sx, cos * sy, oy]
 }
 
-function tileRange(min: number, max: number, wrap: number) {
+/**
+ * Repeat tiles a span touches. With `tolerance`, overshooting a tile edge by
+ * up to TILE_EPSILON is ignored — that classifies tiling/offset islands.
+ * Without it, every touched tile is returned — that decides what to
+ * rasterize, so no sample is ever dropped.
+ */
+function tileRange(min: number, max: number, wrap: number, tolerance = 0) {
   if (wrap === WRAP_CLAMP) return [0, 0]
-  // A max sitting on (or just past) a tile edge belongs to the tile below it.
-  const first = Math.floor(min + TILE_EPSILON)
-  return [first, Math.max(first, Math.ceil(max - TILE_EPSILON) - 1)]
+  // A max sitting exactly on a tile edge belongs to the tile below it.
+  const first = Math.floor(min + tolerance)
+  const last = Math.ceil(max - tolerance) - 1
+  // A span narrower than the tolerance still lives in the tile holding it.
+  if (last < first) return [Math.floor(min), Math.floor(min)]
+  return [first, last]
 }
 
 /** Fold a coordinate in tile `tile` back into 0..1 for the given wrap mode. */
@@ -207,12 +216,16 @@ function forEachFoldedTriangle(
       continue
     }
 
+    // Classify with edge tolerance: islands merely offset into another tile
+    // fold back exactly; one straddling a seam means the wrap is in use.
+    const [cu0, cu1] = tileRange(minU, maxU, wrapS, TILE_EPSILON)
+    const [cv0, cv1] = tileRange(minV, maxV, wrapT, TILE_EPSILON)
+    if (cu1 > cu0 || cv1 > cv0) tiling = true
+    else if (cu0 !== 0 || cv0 !== 0) offset = true
+
+    // Rasterize every tile the triangle actually touches.
     const [tu0, tu1] = tileRange(minU, maxU, wrapS)
     const [tv0, tv1] = tileRange(minV, maxV, wrapT)
-    // Islands merely offset into another tile fold back exactly; a triangle
-    // straddling a seam means the sampler's wrap is genuinely in use.
-    if (tu1 > tu0 || tv1 > tv0) tiling = true
-    else if (tu0 !== 0 || tv0 !== 0) offset = true
     const tilesU = tu1 - tu0 + 1
     const tilesV = tv1 - tv0 + 1
     if (tilesU * tilesV > MAX_TILES_PER_TRIANGLE) {
@@ -259,6 +272,17 @@ function clipPolygon(polygon: Point[], axis: 0 | 1, at: number, keepBelow: boole
     if (inside(current)) result.push(current)
   }
   return result
+}
+
+/**
+ * Cells a [min, max] span overlaps, ignoring mere contact with a cell
+ * boundary (within CELL_EPSILON). A span thinner than that still marks the
+ * cell holding it.
+ */
+function cellSpan(min: number, max: number) {
+  const first = Math.floor(min + CELL_EPSILON)
+  const last = Math.ceil(max - CELL_EPSILON) - 1
+  return last < first ? [Math.floor(min), Math.floor(min)] : [first, last]
 }
 
 function clampCell(value: number, size: number) {
@@ -379,10 +403,12 @@ function rasterizeTriangle(
   const area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
   if (area === 0) return
 
-  const startX = Math.max(0, Math.floor(Math.min(x0, x1, x2)))
-  const endX = Math.min(width - 1, Math.floor(Math.max(x0, x1, x2)))
-  const startY = Math.max(0, Math.floor(Math.min(y0, y1, y2)))
-  const endY = Math.min(height - 1, Math.floor(Math.max(y0, y1, y2)))
+  const [spanX0, spanX1] = cellSpan(Math.min(x0, x1, x2), Math.max(x0, x1, x2))
+  const [spanY0, spanY1] = cellSpan(Math.min(y0, y1, y2), Math.max(y0, y1, y2))
+  const startX = Math.max(0, spanX0)
+  const endX = Math.min(width - 1, spanX1)
+  const startY = Math.max(0, spanY0)
+  const endY = Math.min(height - 1, spanY1)
   if (startX > endX || startY > endY) return
 
   // Edge functions oriented so the interior is positive. Each is widened by
