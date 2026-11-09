@@ -10,11 +10,13 @@ import {
   color,
   float,
   fract,
-  materialEmissive,
+  mix,
+  output,
   screenCoordinate,
   screenDPR,
   smoothstep,
   vec3,
+  vec4,
 } from 'three/tsl'
 
 import type { InspectTarget } from '../controls/control-system'
@@ -36,8 +38,9 @@ const GHOST_COLOR = '#8a8a8a'
 const GHOST_OPACITY = 0.05
 
 /**
- * Subtle white tint + fixed-pixel 45° screen-space stripes, expressed as an
- * emissive contribution on top of the material's own emissive.
+ * Subtle white tint + fixed-pixel 45° screen-space stripes, blended over the
+ * material's final shaded color (`output`), so it reads the same on lit and
+ * unlit materials alike and never depends on material-specific properties.
  */
 function createHighlightNode(): Node {
   const stripePx = float(STRIPE_SPACING_PX).mul(screenDPR)
@@ -49,10 +52,8 @@ function createHighlightNode(): Node {
     .mul(0.7071)
   const line = smoothstep(linePx.mul(0.5), linePx, distToLine).oneMinus()
 
-  const glow = line.mul(LINE_STRENGTH).add(TINT_STRENGTH)
-  // keep the material's own emissive (typed loosely upstream) underneath
-  const baseEmissive = materialEmissive as unknown as Node<'vec3'>
-  return vec3(1).mul(glow).add(baseEmissive)
+  const strength = line.mul(LINE_STRENGTH).add(TINT_STRENGTH)
+  return vec4(mix(output.rgb, vec3(1), strength), output.a)
 }
 
 interface MaterialSwap {
@@ -62,7 +63,7 @@ interface MaterialSwap {
 
 /**
  * Owns the visual state of inspection across the WHOLE model in one coherent
- * pass: the inspected meshes get a striped emissive highlight (their own
+ * pass: the inspected meshes get a striped overlay highlight (their own
  * materials promoted to node pendants, no duplicate geometry); every other
  * mesh is ghosted (a single faint, depth-write-off material) so nothing
  * occludes the focus while the rest lingers as context.
@@ -156,10 +157,8 @@ class HighlightSystem implements System {
       nodeMaterial = nodeMaterial.clone()
     }
 
-    // emissiveNode lives on the standard/physical node classes
-    ;(
-      nodeMaterial as NodeMaterial & { emissiveNode: Node | null }
-    ).emissiveNode = this.highlightNode
+    // post-shading overlay: works for every node material class
+    nodeMaterial.outputNode = this.highlightNode
     this.converted.set(material, nodeMaterial)
     this.modelDisposer.add(nodeMaterial)
     return nodeMaterial
