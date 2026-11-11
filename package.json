@@ -11,6 +11,7 @@
     "start": "next start",
     "changeset": "changeset",
     "version-packages": "changeset version",
+    "release": "changeset git-tag",
     "lint": "eslint",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit"

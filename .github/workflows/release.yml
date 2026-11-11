@@ -36,3 +36,6 @@ jobs:
         uses: changesets/action@v2
         with:
           version-script: pnpm version-packages
+          # Runs once the Version Packages PR merges (no pending changesets left):
+          # tags v<version> and creates a GitHub release from the CHANGELOG entry.
+          publish-script: pnpm release
