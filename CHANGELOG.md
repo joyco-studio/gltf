@@ -1,5 +1,15 @@
 # gltf
 
+## 0.7.0
+
+### Minor Changes
+
+- 492f9c9: Add a Renderer settings panel (top right, shown while nothing is inspected): pick an environment map from built-in presets or upload/drop your own `.hdr` / `.exr`, tweak its intensity and rotation, and choose a tone-mapping curve with exposure. Tone mapping applies to the model only, so the background and grid keep matching the page theme. Settings are remembered per device.
+
+### Patch Changes
+
+- 0a8d93b: Fix a render crash (`Cannot read properties of undefined (reading 'r')`) when inspecting or hovering meshes with unlit materials. The inspect highlight is now blended over the material's final shaded color instead of injected as emissive light, so it looks consistent across every material type.
+
 ## 0.6.0
 
 ### Minor Changes
