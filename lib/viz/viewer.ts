@@ -26,6 +26,7 @@ import {
 import { PickSystem } from './systems/pick-system'
 import { RenderSystem } from './systems/render-system'
 import { SkeletonSystem } from './systems/skeleton-system'
+import { ToneMappingSystem } from './systems/tone-mapping-system'
 import { VisibilitySystem } from './systems/visibility-system'
 
 type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
@@ -61,6 +62,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly camera: CameraSystem
   readonly controls: ControlSystem
   readonly environment: EnvironmentSystem
+  readonly toneMapping: ToneMappingSystem
   readonly grid: GridSystem
   readonly bounds: BoundsSystem
   readonly cameraHelper: CameraHelperSystem
@@ -93,6 +95,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.camera = new CameraSystem()
     this.controls = new ControlSystem(canvas)
     this.environment = new EnvironmentSystem()
+    this.toneMapping = new ToneMappingSystem()
     this.grid = new GridSystem()
     this.bounds = new BoundsSystem()
     this.cameraHelper = new CameraHelperSystem()
@@ -110,6 +113,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.systems = [
       this.camera,
       this.controls,
+      this.toneMapping,
       this.environment,
       this.grid,
       this.bounds,

@@ -15,6 +15,14 @@ import {
   type SkeletonSnapshot,
 } from '@/lib/viz/systems/skeleton-system'
 import type { CameraPreview } from '@/lib/viz/systems/camera-preview-system'
+import {
+  DEFAULT_ENVIRONMENT_SNAPSHOT,
+  type EnvironmentSnapshot,
+} from '@/lib/viz/systems/environment-system'
+import {
+  DEFAULT_TONE_MAPPING,
+  type ToneMappingSnapshot,
+} from '@/lib/viz/systems/tone-mapping-system'
 import { EMPTY_VISIBILITY_SNAPSHOT } from '@/lib/viz/systems/visibility-system'
 import {
   IDLE_ADVISORY,
@@ -180,8 +188,50 @@ function useAdvisoryState(): AdvisorySnapshot {
   )
 }
 
+const getDefaultEnvironment = () => DEFAULT_ENVIRONMENT_SNAPSHOT
+
+/** React's view into the image-based lighting setup. */
+function useEnvironmentState(): EnvironmentSnapshot {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.environment.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.environment.getSnapshot() : getDefaultEnvironment,
+    getDefaultEnvironment
+  )
+}
+
+const getDefaultToneMapping = () => DEFAULT_TONE_MAPPING
+
+/** React's view into the model tone-mapping curve and exposure. */
+function useToneMappingState(): ToneMappingSnapshot {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.toneMapping.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.toneMapping.getSnapshot() : getDefaultToneMapping,
+    getDefaultToneMapping
+  )
+}
+
 export {
   useAdvisoryState,
+  useEnvironmentState,
+  useToneMappingState,
   useAnimationsState,
   useCameraPreview,
   useAxesVisible,

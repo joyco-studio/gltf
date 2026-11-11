@@ -15,6 +15,7 @@ import type {
 } from '@/lib/viz/systems/model-system'
 import type { InspectTarget } from '@/lib/viz/controls/control-system'
 
+import { RendererSettingsPanel } from './renderer-settings-panel'
 import { useCameraPreview, useControlsState } from './viz-hooks'
 import { NODE_TYPE_LABELS } from './node-type'
 import { useViewer, type HierarchySelection } from './viewer-provider'
@@ -297,6 +298,8 @@ function useElementTransform(target: InspectTarget | null) {
 /**
  * Floating read-only details inspector for the inspected scene element —
  * or, with nothing inspected, the camera the viewport is looking through.
+ * When neither applies, the same top-right slot hosts the global renderer
+ * settings instead.
  */
 function ElementInfoPanel() {
   const { revealInHierarchy, snapshot } = useViewer()
@@ -314,14 +317,16 @@ function ElementInfoPanel() {
   )
   const transform = useElementTransform(inspecting)
 
+  if (!snapshot.document) return null
   if (
-    !snapshot.document ||
     !inspecting ||
-    (inspecting.kind !== 'node' && inspecting.kind !== 'mesh') ||
-    !transform
+    (inspecting.kind !== 'node' && inspecting.kind !== 'mesh')
   ) {
-    return null
+    return <RendererSettingsPanel />
   }
+  // the transform resolves a tick after the target; keep the slot empty
+  // meanwhile rather than flashing the settings panel
+  if (!transform) return null
 
   const instances =
     inspecting.kind === 'mesh'

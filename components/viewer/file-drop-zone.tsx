@@ -3,6 +3,8 @@
 import * as React from 'react'
 import { FileUp } from 'lucide-react'
 
+import { isEnvironmentFile } from '@/lib/viz/environment-presets'
+
 import { useViewer } from './viewer-provider'
 
 const ACCEPTED_EXTENSIONS =
@@ -34,7 +36,7 @@ function parseHttpUrl(text: string): string | null {
  * paste: clipboard files load directly, a pasted http(s) URL is fetched.
  */
 function FileDropZone() {
-  const { openFiles, openUrl } = useViewer()
+  const { viewer, openFiles, openUrl } = useViewer()
   const [dragging, setDragging] = React.useState(false)
   const dragDepth = React.useRef(0)
 
@@ -59,6 +61,11 @@ function FileDropZone() {
       dragDepth.current = 0
       setDragging(false)
       const files = [...(event.dataTransfer?.files ?? [])]
+      // a lone .hdr / .exr is an environment map, not a model
+      if (files.length === 1 && isEnvironmentFile(files[0])) {
+        viewer?.environment.loadFile(files[0])
+        return
+      }
       if (files.length > 0) openFiles(files)
     }
 
@@ -92,7 +99,7 @@ function FileDropZone() {
       window.removeEventListener('drop', handleDrop)
       window.removeEventListener('paste', handlePaste)
     }
-  }, [openFiles, openUrl])
+  }, [viewer, openFiles, openUrl])
 
   if (!dragging) return null
 
@@ -102,6 +109,9 @@ function FileDropZone() {
         <FileUp className="size-8 text-primary" />
         <p className="font-mono text-sm uppercase tracking-wide text-foreground">
           Drop .glb / .gltf to inspect
+        </p>
+        <p className="font-mono text-xs text-muted-foreground">
+          or an .hdr / .exr to light the scene
         </p>
       </div>
     </div>
