@@ -104,6 +104,7 @@ class HighlightSystem implements System {
     this.ghost = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
+      toneMapped: false, // a fixed wash, whatever the model's tone curve
     })
     this.ghost.colorNode = color(GHOST_COLOR)
     this.ghost.opacityNode = float(GHOST_OPACITY)

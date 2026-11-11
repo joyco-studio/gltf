@@ -33,8 +33,9 @@ class RenderSystem implements System {
     })
     this.renderer.outputColorSpace = SRGBColorSpace
     // exact colors end-to-end: the background dome, fog and grid must land
-    // precisely on the page theme color — a filmic curve would shift them
-    // (per-material/post tone mapping can be layered on the model later)
+    // precisely on the page theme color — a fullscreen curve would shift
+    // them. User tone mapping is applied to the model only, in-material
+    // (see ToneMappingSystem / EnvironmentSystem's scene output node).
     this.renderer.toneMapping = NoToneMapping
 
     this.whenReady = this.renderer

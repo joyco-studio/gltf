@@ -81,6 +81,8 @@ class GridSystem extends EventEmitter<{ change: boolean }> implements System {
     const material = new MeshBasicNodeMaterial({
       depthWrite: false,
       transparent: true,
+      // fogged like the model, but never tone-mapped off the theme color
+      toneMapped: false,
     })
     material.colorNode = color(GRID_COLOR)
     material.opacityNode = float(GRID_OPACITY)

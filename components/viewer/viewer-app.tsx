@@ -14,6 +14,7 @@ import { resolveSharePath } from "./share-path";
 import { CameraPreviewBanner, CameraPreviewFrame } from "./camera-preview";
 import { InspectBanner } from "./inspect-banner";
 import { InspectorPanel } from "./inspector-panel";
+import { RendererSettingsPersistence } from "./renderer-settings";
 import { SearchCommand } from "./search-command";
 import { ViewerCanvas } from "./viewer-canvas";
 import { ViewerHeader } from "./viewer-header";
@@ -165,6 +166,7 @@ function ViewerApp() {
         </div>
         <FileDropZone />
         <SearchCommand />
+        <RendererSettingsPersistence />
         {/* useSearchParams needs a Suspense boundary on prerendered routes */}
         <React.Suspense>
           <UrlParamLoader />
