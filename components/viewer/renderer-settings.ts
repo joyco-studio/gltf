@@ -110,10 +110,15 @@ function RendererSettingsPersistence() {
     const save = () => {
       const environment = viewer.environment.getSnapshot()
       const toneMapping = viewer.toneMapping.getSnapshot()
+      const { active, load } = environment
       settingsStore.set({
+        // only a preset that actually finished loading replaces the
+        // remembered choice — while a restore is in flight (or failed, e.g.
+        // offline) `active` is still the fallback, which must not overwrite
+        // it; uploads can't be persisted at all
         environment:
-          environment.active.kind === 'preset'
-            ? environment.active.id
+          load.phase === 'ready' && active.kind === 'preset'
+            ? active.id
             : settingsStore.get().environment,
         intensity: environment.intensity,
         rotation: environment.rotation,
