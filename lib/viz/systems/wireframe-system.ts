@@ -5,8 +5,25 @@ import { EventEmitter } from '../event-emitter'
 import type { System } from '../system'
 import type { Viewer } from '../viewer'
 
-/** Keys typed into these never toggle the wireframe. */
-const EDITABLE = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+/**
+ * While one of these has focus, Tab keeps its focus-navigation meaning —
+ * the shortcut only fires with nothing focused (the canvas never takes
+ * focus, so that's the case after any viewport interaction).
+ */
+const KEEPS_TAB = [
+  'a[href]',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'summary',
+  '[contenteditable=""]',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+  '[role="dialog"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+].join(', ')
 
 /** Point a material at the wireframe state, invalidating its pipeline only on change. */
 function setWireframe(material: Material, enabled: boolean) {
@@ -21,7 +38,8 @@ function materialsOf(mesh: Mesh): Material[] {
 }
 
 /**
- * Whole-model wireframe view (Tab, or the toolbar toggle). Flips the
+ * Whole-model wireframe view (Tab with no control focused, or the toolbar
+ * toggle). Flips the
  * `wireframe` flag on the model's own materials instead of swapping them, so
  * each primitive keeps its color and the HighlightSystem's material swaps
  * stay untouched — the materials it hands out sync from `enabled` on use.
@@ -88,11 +106,9 @@ class WireframeSystem extends EventEmitter<{ change: boolean }> implements Syste
     ) {
       return
     }
-    // leave Tab to focus navigation inside fields, dialogs and menus
+    // a focused control keeps Tab for keyboard navigation
     const target = event.target as Partial<Element> | null
-    if (target?.closest?.(`${EDITABLE}, [role="dialog"], [role="menu"], [role="listbox"]`)) {
-      return
-    }
+    if (target?.closest?.(KEEPS_TAB)) return
     event.preventDefault()
     this.toggle()
   }

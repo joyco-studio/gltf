@@ -99,4 +99,26 @@ describe('WireframeSystem', () => {
     assert.equal(system.isEnabled, true)
     system.dispose()
   })
+
+  it('leaves Tab to focus navigation while a control has focus', () => {
+    const { root, viewer } = createModel()
+    const system = new WireframeSystem()
+    system.init(viewer)
+    system.bind(root)
+
+    // a focused toolbar button; its keydown bubbles up to window
+    const button = {
+      closest: (selector: string) =>
+        selector.split(', ').includes('button') ? button : null,
+    }
+    const event = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'Tab',
+    })
+    Object.defineProperty(event, 'target', { value: button })
+    window.dispatchEvent(event)
+
+    assert.equal(system.isEnabled, false)
+    assert.equal(event.defaultPrevented, false)
+    system.dispose()
+  })
 })
