@@ -143,7 +143,11 @@ class HighlightSystem implements System {
 
   private promote(material: Material): Material {
     const cached = this.converted.get(material)
-    if (cached) return cached
+    if (cached) {
+      // cached across wireframe toggles — catch up before going on screen
+      this.viewer.wireframe.sync(cached)
+      return cached
+    }
 
     // the renderer's own classic→node conversion (property copy); node
     // materials come back as-is, so clone those before augmenting
@@ -189,6 +193,7 @@ class HighlightSystem implements System {
 
     const { inspecting, hovered } = this
     if (!inspecting && !hovered) return
+    this.viewer.wireframe.sync(this.ghost)
 
     const focused = inspecting
       ? new Set(model.getMeshesForTarget(inspecting))
