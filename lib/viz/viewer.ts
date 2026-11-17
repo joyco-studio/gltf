@@ -28,6 +28,7 @@ import { RenderSystem } from './systems/render-system'
 import { SkeletonSystem } from './systems/skeleton-system'
 import { ToneMappingSystem } from './systems/tone-mapping-system'
 import { VisibilitySystem } from './systems/visibility-system'
+import { WireframeSystem } from './systems/wireframe-system'
 
 type ViewerStatus = 'empty' | 'loading' | 'ready' | 'error'
 
@@ -74,6 +75,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
   readonly animations: AnimationSystem
   readonly skeleton: SkeletonSystem
   readonly visibility: VisibilitySystem
+  readonly wireframe: WireframeSystem
   /** Texture-space usage analysis, started lazily by the UV Coverage tab. */
   readonly advisory = new TextureAdvisor()
 
@@ -107,6 +109,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
     this.animations = new AnimationSystem()
     this.skeleton = new SkeletonSystem()
     this.visibility = new VisibilitySystem()
+    this.wireframe = new WireframeSystem()
 
     // update order: controls (navigation) → animations (pose) → skeleton
     // (follows the pose) → camera preview (copies the posed camera) → render
@@ -125,6 +128,7 @@ class Viewer extends EventEmitter<ViewerEvents> {
       this.animations,
       this.skeleton,
       this.visibility,
+      this.wireframe,
       this.cameraPreview,
       this.render,
     ]

@@ -1,7 +1,16 @@
 'use client'
 
 import * as React from 'react'
-import { Axis3d, Bone, Camera, Grid3x3, LocateFixed, Orbit, Plane } from 'lucide-react'
+import {
+  Axis3d,
+  Bone,
+  Box,
+  Camera,
+  Grid3x3,
+  LocateFixed,
+  Orbit,
+  Plane,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Cluster } from '@/components/ui/cluster'
@@ -20,6 +29,7 @@ import {
   useControlsState,
   useGridVisible,
   useSkeletonState,
+  useWireframeEnabled,
 } from './viz-hooks'
 
 const MODES: {
@@ -50,6 +60,7 @@ function ControlsToolbar() {
   const gridVisible = useGridVisible()
   const axesVisible = useAxesVisible()
   const skeleton = useSkeletonState()
+  const wireframe = useWireframeEnabled()
   const axesLabel = controls.inspecting ? 'local axes' : 'world axes'
 
   // no document → idle showcase: the viewer auto-orbits, controls stay hidden
@@ -152,6 +163,24 @@ function ControlsToolbar() {
               {controls.projection === 'perspective'
                 ? 'Switch to orthographic projection'
                 : 'Switch to perspective projection'}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={wireframe ? 'default' : 'accent'}
+                size="icon-sm"
+                onClick={() => viewer.wireframe.toggle()}
+                aria-label="Toggle wireframe"
+                aria-pressed={wireframe}
+                aria-keyshortcuts="Tab"
+              >
+                <Box />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {wireframe ? 'Hide' : 'Show'} wireframe <Kbd>Tab</Kbd>
             </TooltipContent>
           </Tooltip>
 

@@ -70,6 +70,24 @@ function useGridVisible(): boolean {
   )
 }
 
+/** React's view into the WireframeSystem toggle. */
+function useWireframeEnabled(): boolean {
+  const { viewer } = useViewer()
+
+  return React.useSyncExternalStore(
+    React.useMemo(
+      () =>
+        viewer
+          ? (onStoreChange: () => void) =>
+              viewer.wireframe.on('change', onStoreChange)
+          : noopSubscribe,
+      [viewer]
+    ),
+    viewer ? () => viewer.wireframe.isEnabled : () => false,
+    () => false
+  )
+}
+
 /** React's view into the coordinate helper's visibility. */
 function useAxesVisible(): boolean {
   const { viewer } = useViewer()
@@ -237,6 +255,7 @@ export {
   useAxesVisible,
   useControlsState,
   useGridVisible,
+  useWireframeEnabled,
   useSkeletonState,
   useHiddenNodes,
 }
