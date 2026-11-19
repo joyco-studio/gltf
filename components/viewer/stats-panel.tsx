@@ -3,13 +3,18 @@
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatBytes, formatNumber } from "@/lib/format";
+import type { GltfDocumentInfo } from "@/lib/viz/inspect";
 import type { GltfStats, SizeCategory } from "@/lib/viz/stats";
+
+import { selectionName } from "./share-path";
+import { useViewer } from "./viewer-provider";
 
 const CATEGORY_LABELS: Record<SizeCategory, { label: string; hint: string }> = {
   geometry: {
@@ -176,6 +181,106 @@ function BreakdownTable({ stats, total }: { stats: GltfStats; total: number }) {
   );
 }
 
+/**
+ * The heaviest inspectable elements per category; each name jumps to the
+ * element in the inspector (and frames it in the viewport).
+ */
+function TopOffenders({
+  stats,
+  document,
+}: {
+  stats: GltfStats;
+  document: GltfDocumentInfo;
+}) {
+  const { jumpTo } = useViewer();
+  const items = stats.breakdown.filter(({ offenders }) => offenders.length);
+  if (!items.length) return null;
+
+  return (
+    <>
+      <SectionTitle>Top offenders</SectionTitle>
+      <table className="w-full table-fixed font-mono text-xs">
+        {/* fixed layout so long names truncate instead of pushing the numbers */}
+        <colgroup>
+          <col />
+          <col className="w-24" />
+          <col className="w-20" />
+        </colgroup>
+        <thead className="sr-only">
+          <tr>
+            <th>Element</th>
+            <th>Size</th>
+            <th>Share of category</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(({ category, bytes: categoryBytes, offenders }) => (
+            <React.Fragment key={category}>
+              <tr className="border-t first:border-t-0">
+                <th
+                  scope="colgroup"
+                  colSpan={3}
+                  className="py-1.5 pl-4 text-left font-normal"
+                >
+                  <span className="inline-flex items-center gap-2 uppercase tracking-wide text-foreground">
+                    <span
+                      aria-hidden
+                      className="size-2.5 shrink-0"
+                      style={{ background: swatch(category) }}
+                    />
+                    {CATEGORY_LABELS[category].label}
+                  </span>
+                </th>
+              </tr>
+              {offenders.map((offender) => {
+                const selection = { kind: offender.kind, id: offender.id };
+                const name = selectionName(document, selection);
+                return (
+                  <tr
+                    key={`${offender.kind}-${offender.id}`}
+                    className="text-muted-foreground"
+                  >
+                    <th
+                      scope="row"
+                      className="py-0.5 pl-[2.375rem] text-left font-normal"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {name ? (
+                          <Button
+                            variant="link"
+                            className="h-auto min-w-0 shrink justify-start p-0 font-mono text-xs font-normal text-foreground underline"
+                            onClick={() => jumpTo(selection, name)}
+                            aria-label={`Inspect ${offender.kind} ${name}`}
+                          >
+                            <span className="truncate">{name}</span>
+                          </Button>
+                        ) : (
+                          <span className="truncate">
+                            {offender.kind} {offender.id}
+                          </span>
+                        )}
+                        <Badge variant="muted" size="sm" className="shrink-0">
+                          {offender.kind}
+                        </Badge>
+                      </span>
+                    </th>
+                    <td className="py-0.5 text-right tabular-nums text-foreground">
+                      {formatBytes(offender.bytes)}
+                    </td>
+                    <td className="py-0.5 pr-4 text-right tabular-nums">
+                      {formatShare(offender.bytes, categoryBytes)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 function StatRow({
   label,
   value,
@@ -200,7 +305,13 @@ function StatRow({
   );
 }
 
-function StatsPanel({ stats }: { stats: GltfStats | null }) {
+function StatsPanel({
+  stats,
+  document,
+}: {
+  stats: GltfStats | null;
+  document: GltfDocumentInfo;
+}) {
   if (!stats) {
     return (
       <p className="p-4 font-mono text-xs text-muted-foreground">
@@ -248,6 +359,8 @@ function StatsPanel({ stats }: { stats: GltfStats | null }) {
         {total > 0 ? <WeightBar stats={stats} total={total} /> : null}
       </div>
       <BreakdownTable stats={stats} total={total} />
+
+      <TopOffenders stats={stats} document={document} />
 
       <SectionTitle>Scene</SectionTitle>
       <dl className="flex flex-col py-2">

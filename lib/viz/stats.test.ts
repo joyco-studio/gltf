@@ -163,4 +163,55 @@ describe('computeGltfStats', () => {
       JSON: 2000 - 1500 - inline.length - 12,
     })
   })
+
+  it('ranks the top 5 inspectable offenders per category', () => {
+    // seven meshes with 12·(i+1) B of positions each → only the 5 largest
+    const meshCount = 7
+    const stats = computeGltfStats({
+      json: {
+        buffers: [{ byteLength: 10_000 }],
+        bufferViews: [
+          ...Array.from({ length: meshCount }, (_, i) => ({
+            buffer: 0,
+            byteLength: 12 * (i + 1),
+          })),
+          { buffer: 0, byteLength: 500 }, // image 0
+          { buffer: 0, byteLength: 64 }, // inverse bind matrices
+        ],
+        accessors: [
+          ...Array.from({ length: meshCount }, (_, i) => ({
+            bufferView: i,
+            componentType: 5126,
+            count: i + 1,
+            type: 'VEC3',
+          })),
+          { bufferView: meshCount + 1, componentType: 5126, count: 1, type: 'MAT4' },
+        ],
+        meshes: Array.from({ length: meshCount }, (_, i) => ({
+          primitives: [{ attributes: { POSITION: i } }],
+        })),
+        nodes: [{ mesh: 0, skin: 0 }],
+        skins: [{ inverseBindMatrices: meshCount }],
+        images: [{ bufferView: meshCount, mimeType: 'image/png' }],
+        // two textures share image 0 → credited once, to the first
+        textures: [{ source: 0 }, { source: 0 }],
+      },
+      totalSize: null,
+      glbJsonLength: null,
+    })
+
+    const offenders = (category: SizeCategory) =>
+      stats.breakdown.find((item) => item.category === category)?.offenders
+
+    assert.deepEqual(offenders('geometry'), [
+      { kind: 'mesh', id: 6, bytes: 84 },
+      { kind: 'mesh', id: 5, bytes: 72 },
+      { kind: 'mesh', id: 4, bytes: 60 },
+      { kind: 'mesh', id: 3, bytes: 48 },
+      { kind: 'mesh', id: 2, bytes: 36 },
+    ])
+    assert.deepEqual(offenders('textures'), [{ kind: 'texture', id: 0, bytes: 500 }])
+    // skins aren't inspectable — the skinned node stands in
+    assert.deepEqual(offenders('skinning'), [{ kind: 'node', id: 0, bytes: 64 }])
+  })
 })

@@ -29,11 +29,23 @@ interface SizeEntry {
   bytes: number
 }
 
+/** An inspectable element that owns bytes of a category. */
+interface SizeOwner {
+  kind: 'node' | 'mesh' | 'texture' | 'animation'
+  id: number
+}
+
+interface SizeOffender extends SizeOwner {
+  bytes: number
+}
+
 interface SizeBreakdownItem {
   category: SizeCategory
   bytes: number
   /** Sub-breakdown, largest first. */
   entries: SizeEntry[]
+  /** The heaviest elements in this category, largest first (top 5). */
+  offenders: SizeOffender[]
 }
 
 interface GltfStats {
@@ -115,6 +127,7 @@ interface StatsJson {
   meshes?: { primitives: StatsPrimitive[] }[]
   nodes?: {
     mesh?: number
+    skin?: number
     extensions?: {
       EXT_mesh_gpu_instancing?: { attributes?: Record<string, number> }
     }
@@ -125,7 +138,10 @@ interface StatsJson {
     samplers?: { input: number; output: number }[]
   }[]
   materials?: unknown[]
-  textures?: unknown[]
+  textures?: {
+    source?: number
+    extensions?: Record<string, { source?: number } | undefined>
+  }[]
 }
 
 interface GltfStatsInput {
@@ -200,10 +216,13 @@ function primitiveTriangles(mode: number, count: number) {
   return 0
 }
 
+const OFFENDER_LIMIT = 5
+
 class ByteLedger {
   private totals = new Map<SizeCategory, Map<string, number>>()
+  private owners = new Map<SizeCategory, Map<string, SizeOffender>>()
 
-  add(category: SizeCategory, key: string, bytes: number) {
+  add(category: SizeCategory, key: string, bytes: number, owner?: SizeOwner) {
     if (!(bytes > 0)) return
     let entries = this.totals.get(category)
     if (!entries) {
@@ -211,6 +230,17 @@ class ByteLedger {
       this.totals.set(category, entries)
     }
     entries.set(key, (entries.get(key) ?? 0) + bytes)
+
+    if (!owner) return
+    let owners = this.owners.get(category)
+    if (!owners) {
+      owners = new Map()
+      this.owners.set(category, owners)
+    }
+    const ownerKey = `${owner.kind}:${owner.id}`
+    const offender = owners.get(ownerKey) ?? { ...owner, bytes: 0 }
+    offender.bytes += bytes
+    owners.set(ownerKey, offender)
   }
 
   sum() {
@@ -228,7 +258,12 @@ class ByteLedger {
         .filter(({ bytes }) => bytes > 0)
         .sort((a, b) => b.bytes - a.bytes || a.key.localeCompare(b.key))
       const bytes = entries.reduce((total, entry) => total + entry.bytes, 0)
-      return bytes > 0 ? [{ category, bytes, entries }] : []
+      const offenders = [...(this.owners.get(category)?.values() ?? [])]
+        .map((offender) => ({ ...offender, bytes: Math.round(offender.bytes) }))
+        .filter(({ bytes }) => bytes > 0)
+        .sort((a, b) => b.bytes - a.bytes || a.id - b.id)
+        .slice(0, OFFENDER_LIMIT)
+      return bytes > 0 ? [{ category, bytes, entries, offenders }] : []
     })
   }
 }
@@ -237,6 +272,7 @@ interface Claim {
   category: SizeCategory
   key: string
   weight: number
+  owner?: SizeOwner
 }
 
 function computeGltfStats({
@@ -271,7 +307,8 @@ function computeGltfStats({
     index: number | undefined,
     category: SizeCategory,
     key: string,
-    residentOnGpu: boolean
+    residentOnGpu: boolean,
+    owner?: SizeOwner
   ) => {
     if (index === undefined || claimedAccessors.has(index)) return
     const accessor = accessors[index]
@@ -279,17 +316,19 @@ function computeGltfStats({
     claimedAccessors.add(index)
     const bytes = accessorBytes(accessor)
     if (residentOnGpu) gpuGeometry += bytes
-    claimView(accessor.bufferView, { category, key, weight: bytes })
+    claimView(accessor.bufferView, { category, key, weight: bytes, owner })
     const { sparse } = accessor
     if (sparse) {
       claimView(sparse.indices.bufferView, {
         category,
         key,
+        owner,
         weight: sparse.count * (COMPONENT_BYTES[sparse.indices.componentType] ?? 0),
       })
       claimView(sparse.values.bufferView, {
         category,
         key,
+        owner,
         weight:
           sparse.count *
           (COMPONENT_BYTES[accessor.componentType] ?? 0) *
@@ -303,6 +342,7 @@ function computeGltfStats({
   const uniqueVerticesByMesh: number[] = []
 
   meshes.forEach((mesh, meshId) => {
+    const owner: SizeOwner = { kind: 'mesh', id: meshId }
     let triangles = 0
     let vertices = 0
     for (const primitive of mesh.primitives ?? []) {
@@ -322,22 +362,23 @@ function computeGltfStats({
           category: 'geometry',
           key: 'Draco compressed',
           weight: 1,
+          owner,
         })
       }
 
-      claimAccessor(primitive.indices, 'geometry', 'Indices', true)
+      claimAccessor(primitive.indices, 'geometry', 'Indices', true, owner)
       for (const [semantic, index] of Object.entries(primitive.attributes ?? {})) {
         if (semantic === 'POSITION') {
-          claimAccessor(index, 'geometry', 'Positions', true)
+          claimAccessor(index, 'geometry', 'Positions', true, owner)
         } else if (/^(JOINTS|WEIGHTS)_\d+$/.test(semantic)) {
-          claimAccessor(index, 'skinning', semantic, true)
+          claimAccessor(index, 'skinning', semantic, true, owner)
         } else {
-          claimAccessor(index, 'attributes', semantic, true)
+          claimAccessor(index, 'attributes', semantic, true, owner)
         }
       }
       for (const target of primitive.targets ?? []) {
         for (const [semantic, index] of Object.entries(target)) {
-          claimAccessor(index, 'morphs', semantic, true)
+          claimAccessor(index, 'morphs', semantic, true, owner)
         }
       }
     }
@@ -345,21 +386,30 @@ function computeGltfStats({
     uniqueVerticesByMesh[meshId] = vertices
   })
 
-  for (const skin of json.skins ?? []) {
-    claimAccessor(skin.inverseBindMatrices, 'skinning', 'Inverse bind matrices', false)
-  }
+  // Skins aren't inspectable on their own — credit the first node using one.
+  ;(json.skins ?? []).forEach((skin, skinId) => {
+    const nodeId = nodes.findIndex((node) => node.skin === skinId)
+    claimAccessor(
+      skin.inverseBindMatrices,
+      'skinning',
+      'Inverse bind matrices',
+      false,
+      nodeId >= 0 ? { kind: 'node', id: nodeId } : undefined
+    )
+  })
 
   let drawCalls = 0
-  for (const node of nodes) {
-    if (node.mesh === undefined) continue
+  nodes.forEach((node, nodeId) => {
+    if (node.mesh === undefined) return
     drawCalls += meshes[node.mesh]?.primitives?.length ?? 0
     const instancing = node.extensions?.EXT_mesh_gpu_instancing?.attributes
     for (const [semantic, index] of Object.entries(instancing ?? {})) {
-      claimAccessor(index, 'instancing', semantic, true)
+      claimAccessor(index, 'instancing', semantic, true, { kind: 'node', id: nodeId })
     }
-  }
+  })
 
-  for (const animation of json.animations ?? []) {
+  ;(json.animations ?? []).forEach((animation, animationId) => {
+    const owner: SizeOwner = { kind: 'animation', id: animationId }
     const samplers = animation.samplers ?? []
     // Values are named by what they drive; shared samplers count once.
     const pathBySampler = new Map<number, string>()
@@ -369,16 +419,40 @@ function computeGltfStats({
       }
     }
     samplers.forEach((sampler, index) => {
-      claimAccessor(sampler.input, 'animation', 'Keyframe times', false)
-      claimAccessor(sampler.output, 'animation', pathBySampler.get(index) ?? 'values', false)
+      claimAccessor(sampler.input, 'animation', 'Keyframe times', false, owner)
+      claimAccessor(
+        sampler.output,
+        'animation',
+        pathBySampler.get(index) ?? 'values',
+        false,
+        owner
+      )
     })
+  })
+
+  // Images are inspected through the first texture that samples them;
+  // extensions like KHR_texture_basisu/webp move the source reference.
+  const textureByImage = new Map<number, number>()
+  ;(json.textures ?? []).forEach((texture, textureId) => {
+    const source =
+      Object.values(texture.extensions ?? {}).find(
+        (extension) => typeof extension?.source === 'number'
+      )?.source ?? texture.source
+    if (source !== undefined && !textureByImage.has(source)) {
+      textureByImage.set(source, textureId)
+    }
+  })
+  const imageOwner = (imageId: number): SizeOwner | undefined => {
+    const textureId = textureByImage.get(imageId)
+    return textureId !== undefined ? { kind: 'texture', id: textureId } : undefined
   }
 
-  ;(json.images ?? []).forEach((image) => {
+  ;(json.images ?? []).forEach((image, imageId) => {
     claimView(image.bufferView, {
       category: 'textures',
       key: imageMime(image),
       weight: 1,
+      owner: imageOwner(imageId),
     })
   })
 
@@ -410,20 +484,20 @@ function computeGltfStats({
     const totalWeight = viewClaims.reduce((total, claim) => total + claim.weight, 0)
     for (const claim of viewClaims) {
       const share = totalWeight > 0 ? claim.weight / totalWeight : 1 / viewClaims.length
-      ledger.add(claim.category, claim.key, stored * share)
+      ledger.add(claim.category, claim.key, stored * share, claim.owner)
     }
   })
 
   // Images outside any bufferView: inline data URIs or sibling files.
   let unmeasuredResources = false
-  for (const image of json.images ?? []) {
-    if (image.bufferView !== undefined || !image.uri) continue
+  ;(json.images ?? []).forEach((image, imageId) => {
+    if (image.bufferView !== undefined || !image.uri) return
     const size = image.uri.startsWith('data:')
       ? image.uri.length // inline in the JSON text
       : resourceSizes?.get(image.uri)
     if (size === undefined) unmeasuredResources = true
-    else ledger.add('textures', imageMime(image), size)
-  }
+    else ledger.add('textures', imageMime(image), size, imageOwner(imageId))
+  })
 
   // External buffers that are larger than their declared byteLength (or
   // unused tails) still weigh in the file.
@@ -504,4 +578,12 @@ function glbJsonLength(gltf: GLTF): number | null {
 }
 
 export { CATEGORY_ORDER, computeGltfStats, glbJsonLength }
-export type { GltfStats, GltfStatsInput, SizeBreakdownItem, SizeCategory, SizeEntry }
+export type {
+  GltfStats,
+  GltfStatsInput,
+  SizeBreakdownItem,
+  SizeCategory,
+  SizeEntry,
+  SizeOffender,
+  SizeOwner,
+}

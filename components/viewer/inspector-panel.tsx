@@ -274,7 +274,7 @@ function InspectorPanel() {
         {statsEnabled ? (
           <TabsContent value="stats" className="min-h-0">
             <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
-              <StatsPanel stats={document.stats} />
+              <StatsPanel stats={document.stats} document={document} />
             </ScrollArea>
           </TabsContent>
         ) : null}
