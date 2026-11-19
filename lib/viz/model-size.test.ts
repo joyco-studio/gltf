@@ -19,6 +19,8 @@ describe('model file size', () => {
       fileSet.manager.resolveURL('textures/albedo%20map.png')
       fileSet.manager.resolveURL('data:image/png;base64,AAAA')
       assert.equal(fileSet.totalSize, 17)
+      assert.equal(fileSet.resourceSize('textures/albedo%20map.png'), 7)
+      assert.equal(fileSet.resourceSize('missing.png'), undefined)
     } finally {
       fileSet.revoke()
     }
@@ -41,10 +43,15 @@ describe('model file size', () => {
       assert.equal(init.method, 'HEAD')
       return new Response(null, { headers: { 'content-length': '100' } })
     })
+    const resourceSizes = new Map<string, number>()
     assert.equal(await getRemoteModelSize({
       buffers: [{ uri: 'mesh.bin' }],
       images: [{ uri: './texture.png' }, { uri: 'texture.png' }],
-    }, 50, 'https://example.com/models/model.gltf?token=abc'), 250)
+    }, 50, 'https://example.com/models/model.gltf?token=abc', resourceSizes), 250)
+    // every raw uri spelling maps to its (single) measured resource
+    assert.deepEqual(Object.fromEntries(resourceSizes), {
+      'mesh.bin': 100, './texture.png': 100, 'texture.png': 100,
+    })
     assert.deepEqual(requested, [
       'https://example.com/models/mesh.bin',
       'https://example.com/models/texture.png',

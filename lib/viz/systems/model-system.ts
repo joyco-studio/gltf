@@ -34,6 +34,13 @@ interface LoadedModel {
   root: Object3D
   fileName: string
   totalSize: number | null
+  /** Measured size of each external resource, keyed by its raw JSON `uri`. */
+  resourceSizes: ReadonlyMap<string, number>
+}
+
+interface ResourceJson {
+  buffers?: { uri?: string }[]
+  images?: { uri?: string }[]
 }
 
 /**
@@ -161,9 +168,17 @@ class ModelSystem implements System {
         disposeObject3D(gltf.scene)
         return null
       }
-      return this.swap(
-        gltf, fileSet.rootFile.name, fileSet.totalSize, undefined, files
-      )
+      const json = gltf.parser.json as ResourceJson
+      const resourceSizes = new Map<string, number>()
+      for (const { uri } of [...(json.buffers ?? []), ...(json.images ?? [])]) {
+        const size = uri && !uri.startsWith('data:') ? fileSet.resourceSize(uri) : undefined
+        if (uri && size !== undefined) resourceSizes.set(uri, size)
+      }
+      return this.swap(gltf, fileSet.rootFile.name, {
+        totalSize: fileSet.totalSize,
+        resourceSizes,
+        files,
+      })
     } finally {
       fileSet.revoke()
     }
@@ -177,16 +192,23 @@ class ModelSystem implements System {
     const gltf = await loader.loadAsync(url, (event) => {
       rootSize = event.loaded
     })
+    const resourceSizes = new Map<string, number>()
     const totalSize = await getRemoteModelSize(
       gltf.parser.json,
       rootSize,
-      new URL(url, window.location.href).href
+      new URL(url, window.location.href).href,
+      resourceSizes
     )
     if (loadId !== this.loadId) {
       disposeObject3D(gltf.scene)
       return null
     }
-    return this.swap(gltf, url.split('/').pop() ?? url, totalSize, transform)
+    return this.swap(
+      gltf,
+      url.split('/').pop() ?? url,
+      { totalSize, resourceSizes, files: [] },
+      transform
+    )
   }
 
   private get associations() {
@@ -457,9 +479,8 @@ class ModelSystem implements System {
   private swap(
     gltf: GLTF,
     fileName: string,
-    totalSize: number | null,
-    transform?: ModelTransform,
-    files: File[] = []
+    source: Pick<LoadedModel, 'totalSize' | 'resourceSizes' | 'files'>,
+    transform?: ModelTransform
   ) {
     // Highlight borrows mesh material slots; hand them back before disposing
     // the old graph so its original materials and textures remain enumerable.
@@ -474,7 +495,7 @@ class ModelSystem implements System {
     if (transform?.position) gltf.scene.position.fromArray(transform.position)
     this.container.add(gltf.scene)
     this.modelDisposer.add(() => disposeObject3D(gltf.scene))
-    this.current = { gltf, root: gltf.scene, fileName, files, totalSize }
+    this.current = { gltf, root: gltf.scene, fileName, ...source }
     this.viewer.controls.frame(gltf.scene)
     this.viewer.animations.bind(gltf.animations ?? [], gltf.scene)
     this.viewer.skeleton.bind(gltf.scene, gltf.parser.associations)

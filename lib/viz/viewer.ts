@@ -7,6 +7,7 @@ import { AnimationSystem } from './systems/animation-system'
 import { AxesSystem } from './systems/axes-system'
 import { EventEmitter } from './event-emitter'
 import { inspectGltf, type GltfDocumentInfo } from './inspect'
+import { computeGltfStats, glbJsonLength } from './stats'
 import type { System } from './system'
 import { renderGpuTexturePreview } from './texture-preview'
 import { validateGltf } from './validate'
@@ -258,6 +259,22 @@ class Viewer extends EventEmitter<ViewerEvents> {
       )
       if (previews.disposed || this.model.current !== loaded) return
       document.totalSize = loaded.totalSize
+      document.stats = computeGltfStats({
+        json: source,
+        totalSize: loaded.totalSize,
+        glbJsonLength: glbJsonLength(loaded.gltf),
+        resourceSizes: loaded.resourceSizes,
+        meshInstances: document.meshes.map(({ instances }) => instances),
+        // Textures sharing one image upload it once.
+        textureGpuSizes: [
+          ...new Map(
+            document.textures.map((texture) => [
+              texture.bufferView ?? texture.uri ?? `texture:${texture.id}`,
+              texture.gpuSize,
+            ])
+          ).values(),
+        ],
+      })
       // The schema may have changed while texture inspection was awaiting;
       // derive findings from the latest applied rules at commit time.
       document.validationIssues = validateGltf(source, this.validationSchema)

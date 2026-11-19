@@ -88,6 +88,16 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+  /* file-weight categories (stats tab): fixed categorical order, CVD-validated */
+  --size-geometry: #2a78d6;
+  --size-attributes: #eb6834;
+  --size-textures: #1baf7a;
+  --size-animation: #eda100;
+  --size-skinning: #e87ba4;
+  --size-morphs: #008300;
+  --size-instancing: #6250d6;
+  --size-unreferenced: #e34948;
+  --size-overhead: oklch(0.708 0 0);
   --radius: 0rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -123,6 +133,15 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+  --size-geometry: #3987e5;
+  --size-attributes: #d95926;
+  --size-textures: #199e70;
+  --size-animation: #c98500;
+  --size-skinning: #d55181;
+  --size-morphs: #008300;
+  --size-instancing: #9085e9;
+  --size-unreferenced: #e66767;
+  --size-overhead: oklch(0.45 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
