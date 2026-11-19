@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatBytes, formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { GltfDocumentInfo } from "@/lib/viz/inspect";
 import type { GltfStats, SizeCategory } from "@/lib/viz/stats";
 
@@ -236,9 +237,15 @@ function TopOffenders({
                 const selection = { kind: offender.kind, id: offender.id };
                 const name = selectionName(document, selection);
                 return (
+                  // The whole row is the hit target (same hover as the data
+                  // tables); the name button keeps it keyboard-reachable.
                   <tr
                     key={`${offender.kind}-${offender.id}`}
-                    className="text-muted-foreground"
+                    onClick={name ? () => jumpTo(selection, name) : undefined}
+                    className={cn(
+                      "group/row text-muted-foreground transition-colors",
+                      name && "cursor-pointer hover:bg-muted",
+                    )}
                   >
                     <th
                       scope="row"
@@ -248,11 +255,18 @@ function TopOffenders({
                         {name ? (
                           <Button
                             variant="link"
-                            className="h-auto min-w-0 shrink justify-start p-0 font-mono text-xs font-normal text-foreground underline"
-                            onClick={() => jumpTo(selection, name)}
+                            className="h-auto min-w-0 shrink justify-start p-0 font-mono text-xs font-normal text-foreground hover:no-underline"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              jumpTo(selection, name);
+                            }}
                             aria-label={`Inspect ${offender.kind} ${name}`}
                           >
-                            <span className="truncate">{name}</span>
+                            {/* underline on the truncating span itself — an offset
+                                underline on the button gets clipped by overflow */}
+                            <span className="truncate underline-offset-2 group-hover/row:underline">
+                              {name}
+                            </span>
                           </Button>
                         ) : (
                           <span className="truncate">
@@ -267,7 +281,7 @@ function TopOffenders({
                     <td className="py-0.5 text-right tabular-nums text-foreground">
                       {formatBytes(offender.bytes)}
                     </td>
-                    <td className="py-0.5 pr-4 text-right tabular-nums">
+                    <td className="py-0.5 pr-4 text-right tabular-nums group-hover/row:text-foreground">
                       {formatShare(offender.bytes, categoryBytes)}
                     </td>
                   </tr>
