@@ -125,9 +125,12 @@ interface StatsJson {
   }[]
   images?: { uri?: string; mimeType?: string; bufferView?: number }[]
   meshes?: { primitives: StatsPrimitive[] }[]
+  scene?: number
+  scenes?: { nodes?: number[] }[]
   nodes?: {
     mesh?: number
     skin?: number
+    children?: number[]
     extensions?: {
       EXT_mesh_gpu_instancing?: { attributes?: Record<string, number> }
     }
@@ -152,8 +155,6 @@ interface GltfStatsInput {
   glbJsonLength: number | null
   /** Measured size of external resources, keyed by their raw JSON `uri`. */
   resourceSizes?: ReadonlyMap<string, number>
-  /** Per-mesh instance counts (node refs × GPU instances), by mesh id. */
-  meshInstances?: readonly number[]
   /** Estimated GPU bytes per unique image (null when not decoded). */
   textureGpuSizes?: readonly (number | null)[]
 }
@@ -218,6 +219,37 @@ function primitiveTriangles(mode: number, count: number) {
 
 const OFFENDER_LIMIT = 5
 
+/**
+ * Splits `total` whole bytes by `weights` (largest remainder), so the parts
+ * always sum back to `total` — rounding each share separately would not.
+ */
+function splitBytes(total: number, weights: number[]): number[] {
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0)
+  const exact = weights.map((weight) =>
+    weightSum > 0 ? (total * weight) / weightSum : total / weights.length
+  )
+  const parts = exact.map(Math.floor)
+  let leftover = total - parts.reduce((sum, part) => sum + part, 0)
+  const byRemainder = exact
+    .map((value, index) => ({ index, remainder: value - parts[index] }))
+    .sort((a, b) => b.remainder - a.remainder)
+  for (const { index } of byRemainder) {
+    if (leftover <= 0) break
+    parts[index] += 1
+    leftover -= 1
+  }
+  return parts
+}
+
+/** One identity per external file, however its `uri` is spelled. */
+function resourceKey(uri: string) {
+  try {
+    return new URL(uri, 'file:///').href
+  } catch {
+    return uri
+  }
+}
+
 class ByteLedger {
   private totals = new Map<SizeCategory, Map<string, number>>()
   private owners = new Map<SizeCategory, Map<string, SizeOffender>>()
@@ -280,7 +312,6 @@ function computeGltfStats({
   totalSize,
   glbJsonLength,
   resourceSizes,
-  meshInstances = [],
   textureGpuSizes = [],
 }: GltfStatsInput): GltfStats {
   const json = (rawJson ?? {}) as StatsJson
@@ -398,10 +429,7 @@ function computeGltfStats({
     )
   })
 
-  let drawCalls = 0
   nodes.forEach((node, nodeId) => {
-    if (node.mesh === undefined) return
-    drawCalls += meshes[node.mesh]?.primitives?.length ?? 0
     const instancing = node.extensions?.EXT_mesh_gpu_instancing?.attributes
     for (const [semantic, index] of Object.entries(instancing ?? {})) {
       claimAccessor(index, 'instancing', semantic, true, { kind: 'node', id: nodeId })
@@ -472,27 +500,36 @@ function computeGltfStats({
     const meshopt =
       view.extensions?.EXT_meshopt_compression ??
       view.extensions?.KHR_meshopt_compression
-    const stored = meshopt
-      ? meshopt.byteLength * (bufferScale[meshopt.buffer] ?? 1)
-      : view.byteLength * (bufferScale[view.buffer] ?? 1)
+    const stored = Math.round(
+      meshopt
+        ? meshopt.byteLength * (bufferScale[meshopt.buffer] ?? 1)
+        : view.byteLength * (bufferScale[view.buffer] ?? 1)
+    )
 
     const viewClaims = claims.get(index)
     if (!viewClaims?.length) {
       ledger.add('unreferenced', 'Buffer views', stored)
       return
     }
-    const totalWeight = viewClaims.reduce((total, claim) => total + claim.weight, 0)
-    for (const claim of viewClaims) {
-      const share = totalWeight > 0 ? claim.weight / totalWeight : 1 / viewClaims.length
-      ledger.add(claim.category, claim.key, stored * share, claim.owner)
-    }
+    const shares = splitBytes(stored, viewClaims.map(({ weight }) => weight))
+    viewClaims.forEach((claim, claimIndex) => {
+      ledger.add(claim.category, claim.key, shares[claimIndex], claim.owner)
+    })
   })
 
   // Images outside any bufferView: inline data URIs or sibling files.
   let unmeasuredResources = false
+  const countedFiles = new Set<string>()
   ;(json.images ?? []).forEach((image, imageId) => {
     if (image.bufferView !== undefined || !image.uri) return
-    const size = image.uri.startsWith('data:')
+    const inline = image.uri.startsWith('data:')
+    if (!inline) {
+      // The net weight counts each file once; so must the breakdown.
+      const key = resourceKey(image.uri)
+      if (countedFiles.has(key)) return
+      countedFiles.add(key)
+    }
+    const size = inline
       ? image.uri.length // inline in the JSON text
       : resourceSizes?.get(image.uri)
     if (size === undefined) unmeasuredResources = true
@@ -503,6 +540,9 @@ function computeGltfStats({
   // unused tails) still weigh in the file.
   for (const buffer of buffers) {
     if (!buffer.uri || buffer.uri.startsWith('data:')) continue
+    const key = resourceKey(buffer.uri)
+    if (countedFiles.has(key)) continue
+    countedFiles.add(key)
     const size = resourceSizes?.get(buffer.uri)
     if (size === undefined) unmeasuredResources = true
     else if (size > buffer.byteLength) {
@@ -527,17 +567,39 @@ function computeGltfStats({
 
   /* -------------------------------- counts -------------------------------- */
 
-  let uniqueVertices = 0
+  const sum = (values: number[]) =>
+    values.reduce((total, value) => total + (value ?? 0), 0)
+  const uniqueVertices = sum(uniqueVerticesByMesh)
+  const uniqueTriangles = sum(uniqueTrianglesByMesh)
+
+  // Rendered work only covers what the viewer draws: nodes reachable from
+  // the active scene (GLTFLoader's gltf.scene), not every scene in the file.
+  const activeNodes = new Set<number>()
+  const visit = (nodeId: number) => {
+    if (activeNodes.has(nodeId) || !nodes[nodeId]) return
+    activeNodes.add(nodeId)
+    for (const child of nodes[nodeId].children ?? []) visit(child)
+  }
+  const sceneRoots = json.scenes?.[json.scene ?? 0]?.nodes
+  if (sceneRoots) sceneRoots.forEach(visit)
+  else nodes.forEach((_, nodeId) => activeNodes.add(nodeId))
+
+  let drawCalls = 0
   let renderedVertices = 0
-  let uniqueTriangles = 0
   let renderedTriangles = 0
-  meshes.forEach((_, meshId) => {
-    const instances = meshInstances[meshId] ?? 1
-    uniqueVertices += uniqueVerticesByMesh[meshId] ?? 0
-    uniqueTriangles += uniqueTrianglesByMesh[meshId] ?? 0
+  for (const nodeId of activeNodes) {
+    const { mesh: meshId, extensions } = nodes[nodeId]
+    if (meshId === undefined || !meshes[meshId]) continue
+    // EXT_mesh_gpu_instancing: one draw per primitive, N instances each.
+    const gpuAttribute = Object.values(
+      extensions?.EXT_mesh_gpu_instancing?.attributes ?? {}
+    )[0]
+    const instances =
+      gpuAttribute !== undefined ? (accessors[gpuAttribute]?.count ?? 1) : 1
+    drawCalls += meshes[meshId].primitives?.length ?? 0
     renderedVertices += (uniqueVerticesByMesh[meshId] ?? 0) * instances
     renderedTriangles += (uniqueTrianglesByMesh[meshId] ?? 0) * instances
-  })
+  }
 
   return {
     container: glbJsonLength !== null ? 'glb' : 'gltf',

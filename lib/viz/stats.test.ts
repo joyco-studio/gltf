@@ -55,7 +55,6 @@ describe('computeGltfStats', () => {
       json: triangleJson,
       totalSize: 1000,
       glbJsonLength: 600,
-      meshInstances: [2],
     })
 
     assert.equal(stats.container, 'glb')
@@ -213,5 +212,79 @@ describe('computeGltfStats', () => {
     assert.deepEqual(offenders('textures'), [{ kind: 'texture', id: 0, bytes: 500 }])
     // skins aren't inspectable — the skinned node stands in
     assert.deepEqual(offenders('skinning'), [{ kind: 'node', id: 0, bytes: 64 }])
+  })
+
+  it('splits shared views into whole bytes that sum to the view', () => {
+    // 36 B view shared 12:12:8 → exact shares 13.5 / 13.5 / 9
+    const stats = computeGltfStats({
+      json: {
+        buffers: [{ byteLength: 36 }],
+        bufferViews: [{ buffer: 0, byteLength: 36 }],
+        accessors: [
+          { bufferView: 0, componentType: 5121, count: 12, type: 'SCALAR' },
+          { bufferView: 0, componentType: 5121, count: 12, type: 'SCALAR' },
+          { bufferView: 0, componentType: 5121, count: 8, type: 'SCALAR' },
+        ],
+        meshes: [
+          { primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 } }] },
+        ],
+      },
+      totalSize: 100,
+      glbJsonLength: null,
+    })
+
+    const parts = stats.breakdown.flatMap(({ entries }) => entries)
+    assert.ok(parts.every(({ bytes }) => Number.isInteger(bytes)))
+    assert.equal(bytesOf(stats, 'geometry') + bytesOf(stats, 'attributes'), 36)
+    assert.equal(
+      stats.breakdown.reduce((total, item) => total + item.bytes, 0),
+      100
+    )
+  })
+
+  it('counts an external file once however its uri is spelled', () => {
+    const stats = computeGltfStats({
+      json: {
+        images: [{ uri: 'texture.png' }, { uri: './texture.png' }],
+        textures: [{ source: 0 }, { source: 1 }],
+      },
+      totalSize: 1200,
+      glbJsonLength: null,
+      resourceSizes: new Map([
+        ['texture.png', 1000],
+        ['./texture.png', 1000],
+      ]),
+    })
+
+    assert.equal(bytesOf(stats, 'textures'), 1000)
+    assert.equal(bytesOf(stats, 'overhead'), 200)
+  })
+
+  it('counts rendered work only for the active scene', () => {
+    const stats = computeGltfStats({
+      json: {
+        accessors: [
+          { componentType: 5126, count: 3, type: 'VEC3' },
+          { componentType: 5126, count: 4, type: 'VEC3' }, // 4 GPU instances
+        ],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+        nodes: [
+          { children: [1] },
+          {
+            mesh: 0,
+            extensions: { EXT_mesh_gpu_instancing: { attributes: { TRANSLATION: 1 } } },
+          },
+          { mesh: 0 }, // only in the inactive scene
+        ],
+        scene: 0,
+        scenes: [{ nodes: [0] }, { nodes: [2] }],
+      },
+      totalSize: null,
+      glbJsonLength: null,
+    })
+
+    assert.equal(stats.counts.drawCalls, 1)
+    assert.deepEqual(stats.counts.triangles, { unique: 1, rendered: 4 })
+    assert.deepEqual(stats.counts.vertices, { unique: 3, rendered: 12 })
   })
 })

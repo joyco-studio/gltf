@@ -264,7 +264,6 @@ class Viewer extends EventEmitter<ViewerEvents> {
         totalSize: loaded.totalSize,
         glbJsonLength: glbJsonLength(loaded.gltf),
         resourceSizes: loaded.resourceSizes,
-        meshInstances: document.meshes.map(({ instances }) => instances),
         // Textures sharing one image upload it once.
         textureGpuSizes: [
           ...new Map(
