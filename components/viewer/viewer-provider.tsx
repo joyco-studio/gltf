@@ -19,6 +19,7 @@ const INSPECTOR_TABS = [
   'textures',
   'animations',
   'validation',
+  'stats',
   'uv-coverage',
 ] as const
 type InspectorTab = (typeof INSPECTOR_TABS)[number]

@@ -14,6 +14,12 @@ const FEATURE_FLAGS = [
     description:
       'Find texels no UV ever samples, flag wasteful textures and project download savings. Adds a UV Coverage tab.',
   },
+  {
+    id: 'stats',
+    label: 'Stats',
+    description:
+      'Break the file weight down into geometry, vertex attributes, textures, animation and overhead, with scene counts and a GPU memory estimate. Adds a Stats tab.',
+  },
 ] as const
 
 type FeatureFlagId = (typeof FEATURE_FLAGS)[number]['id']

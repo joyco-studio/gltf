@@ -3,6 +3,7 @@ import type { Texture } from 'three/webgpu'
 import { canvasToBlob } from './canvas-to-blob'
 
 import { collectTextureRefs, type TextureRef } from './advisory/texture-bindings'
+import type { GltfStats } from './stats'
 import { validateGltf, type GltfValidationResult } from './validate'
 
 /**
@@ -123,6 +124,8 @@ interface GltfSceneInfo {
 interface GltfDocumentInfo {
   fileName: string
   totalSize: number | null
+  /** File-weight breakdown; filled in once the file size is measured. */
+  stats: GltfStats | null
   scene: GltfSceneInfo
   /** Scene graph flattened to a DFS list — the source for the tree view. */
   nodes: GltfNodeInfo[]
@@ -667,6 +670,7 @@ async function inspectGltf(
   return {
     fileName,
     totalSize: null,
+    stats: null,
     scene: {
       name: json.scenes?.[0]?.name ?? 'Scene',
       nodeCount: json.nodes?.length ?? 0,

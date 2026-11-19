@@ -3,23 +3,29 @@ interface ModelResources {
   images?: { uri?: string }[]
 }
 
-/** File bytes, including external assets once; embedded assets are in the root. */
+/**
+ * File bytes, including external assets once; embedded assets are in the
+ * root. Measured external sizes are recorded in `resourceSizes` by raw `uri`.
+ */
 async function getRemoteModelSize(
   json: ModelResources,
   rootSize: number | null,
-  baseUrl: string
+  baseUrl: string,
+  resourceSizes?: Map<string, number>
 ): Promise<number | null> {
   if (rootSize === null) return null
 
-  const urls = new Set<string>()
+  const urisByUrl = new Map<string, string[]>()
   for (const resource of [...(json.buffers ?? []), ...(json.images ?? [])]) {
     if (resource.uri && !resource.uri.startsWith('data:')) {
-      urls.add(new URL(resource.uri, baseUrl).href)
+      const url = new URL(resource.uri, baseUrl).href
+      urisByUrl.set(url, [...(urisByUrl.get(url) ?? []), resource.uri])
     }
   }
+  const urls = [...urisByUrl.keys()]
 
   const sizes = await Promise.all(
-    [...urls].map(async (url) => {
+    urls.map(async (url) => {
       try {
         // Inspect metadata without downloading model resources a second time.
         const response = await fetch(url, {
@@ -39,6 +45,11 @@ async function getRemoteModelSize(
       }
     })
   )
+
+  sizes.forEach((size, index) => {
+    if (size === null) return
+    for (const uri of urisByUrl.get(urls[index]) ?? []) resourceSizes?.set(uri, size)
+  })
 
   // Never label a partial sum as the total.
   return sizes.reduce<number | null>(

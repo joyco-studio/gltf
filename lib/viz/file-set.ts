@@ -14,6 +14,8 @@ interface GltfFileSet {
   rootUrl: string
   /** Combined size of the root and unique sibling files used by the loader. */
   readonly totalSize: number | null
+  /** Size of the sibling file a raw glTF `uri` resolves to, if dropped. */
+  resourceSize: (uri: string) => number | undefined
   /** Revoke every object URL created for this set. */
   revoke: () => void
 }
@@ -42,14 +44,16 @@ function createGltfFileSet(files: File[]): GltfFileSet | null {
     return url
   }
 
+  // Relative URIs inside the .gltf reference sibling files by name. The
+  // loader resolves them against the (blob:) root URL, so match on the
+  // last path segment rather than the full URL.
+  const fileFor = (url: string) =>
+    byName.get(decodeURIComponent(url.split('/').pop() ?? ''))
+
   const manager = new LoadingManager()
   manager.setURLModifier((url) => {
     if (url.startsWith('data:')) return url
-    // Relative URIs inside the .gltf reference sibling files by name. The
-    // loader resolves them against the (blob:) root URL, so match on the
-    // last path segment rather than the full URL.
-    const name = decodeURIComponent(url.split('/').pop() ?? '')
-    const file = byName.get(name)
+    const file = fileFor(url)
     if (!file && !url.startsWith('blob:')) hasUnknownSize = true
     return file ? createUrl(file) : url
   })
@@ -63,6 +67,7 @@ function createGltfFileSet(files: File[]): GltfFileSet | null {
         ? null
         : [...usedFiles].reduce((total, file) => total + file.size, 0)
     },
+    resourceSize: (uri) => fileFor(uri)?.size,
     revoke: () => {
       for (const url of objectUrls) URL.revokeObjectURL(url)
       objectUrls.length = 0

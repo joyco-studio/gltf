@@ -23,6 +23,7 @@ import { AnimationsTable } from "./animations-table";
 import { useFeatureFlag } from "./feature-flags";
 import { HierarchyTable } from "./hierarchy-table";
 import { MaterialsTable } from "./materials-table";
+import { StatsPanel } from "./stats-panel";
 import { TexturesGrid } from "./textures-grid";
 import { ValidationList } from "./validation-list";
 import { useViewer, type InspectorTab } from "./viewer-provider";
@@ -66,11 +67,15 @@ function InspectorPanel() {
     setSidebarOpen: setOpen,
   } = useViewer();
   const uvCoverageEnabled = useFeatureFlag("uv-coverage");
+  const statsEnabled = useFeatureFlag("stats");
   const flaggedCount = useFlaggedCount();
-  // A shared ?tab=uv-coverage link falls back to the default tab when the
-  // feature is off for this visitor.
+  // A shared ?tab=uv-coverage / ?tab=stats link falls back to the default
+  // tab when the feature is off for this visitor.
   const activeTab =
-    tab === "uv-coverage" && !uvCoverageEnabled ? "contents" : tab;
+    (tab === "uv-coverage" && !uvCoverageEnabled) ||
+    (tab === "stats" && !statsEnabled)
+      ? "contents"
+      : tab;
   const [width, setWidth] = React.useState(DEFAULT_PANEL_WIDTH);
   const [resizing, setResizing] = React.useState(false);
   const { document } = snapshot;
@@ -197,6 +202,11 @@ function InspectorPanel() {
                     {document.validationIssues.length}
                   </Badge>
                 </TabsTrigger>
+                {statsEnabled ? (
+                  <TabsTrigger value="stats" className="h-8">
+                    Stats
+                  </TabsTrigger>
+                ) : null}
                 {uvCoverageEnabled ? (
                   <TabsTrigger value="uv-coverage" className="h-8">
                     UV Coverage
@@ -260,6 +270,14 @@ function InspectorPanel() {
             <ValidationList issues={document.validationIssues} />
           </ScrollArea>
         </TabsContent>
+
+        {statsEnabled ? (
+          <TabsContent value="stats" className="min-h-0">
+            <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
+              <StatsPanel stats={document.stats} document={document} />
+            </ScrollArea>
+          </TabsContent>
+        ) : null}
 
         {uvCoverageEnabled ? (
           <TabsContent value="uv-coverage" className="min-h-0">

@@ -10,6 +10,7 @@ import type {
   GltfValidationType,
 } from '@/lib/viz/validate'
 
+import { selectionName } from './share-path'
 import { useViewer } from './viewer-provider'
 import { ValidationSchemaEditor } from './validation-schema-editor'
 
@@ -22,19 +23,7 @@ function referenceName(
   document: ReturnType<typeof useViewer>['snapshot']['document'],
   reference: GltfValidationReference
 ) {
-  if (!document) return undefined
-  switch (reference.kind) {
-    case 'node':
-      return document.nodes.find(({ id }) => id === reference.id)?.name
-    case 'mesh':
-      return document.meshes.find(({ id }) => id === reference.id)?.name
-    case 'material':
-      return document.materials.find(({ id }) => id === reference.id)?.name
-    case 'texture':
-      return document.textures.find(({ id }) => id === reference.id)?.name
-    case 'animation':
-      return document.animations.find(({ id }) => id === reference.id)?.name
-  }
+  return document ? selectionName(document, reference) : undefined
 }
 
 function ValidationDescription({ result }: { result: GltfValidationResult }) {

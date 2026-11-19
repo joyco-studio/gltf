@@ -21,6 +21,15 @@ function formatSharePath(selection: Selection, name: string) {
   return `${SEGMENT_BY_KIND[selection.kind]}.${value}`
 }
 
+/** Display name of a selectable element, if it exists in the document. */
+function selectionName(document: GltfDocumentInfo, selection: Selection) {
+  const items = document[SEGMENT_BY_KIND[selection.kind]] as readonly {
+    id: number
+    name: string
+  }[]
+  return items.find(({ id }) => id === selection.id)?.name
+}
+
 function resolveSharePath(
   document: GltfDocumentInfo,
   path: string
@@ -44,4 +53,4 @@ function resolveSharePath(
   return item ? { selection: { kind, id: item.id }, name: item.name } : null
 }
 
-export { formatSharePath, resolveSharePath }
+export { formatSharePath, resolveSharePath, selectionName }
